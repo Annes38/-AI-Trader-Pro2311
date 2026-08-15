@@ -7,192 +7,200 @@
 
 <style>
 *{
-  box-sizing:border-box;
-  font-family:Arial,sans-serif
+box-sizing:border-box;
+font-family:Arial,sans-serif
 }
 
 body{
-  margin:0;
-  background:#080b12;
-  color:#fff
+margin:0;
+background:#080b12;
+color:#fff
 }
 
 .container{
-  max-width:1000px;
-  margin:auto;
-  padding:18px
+max-width:1000px;
+margin:auto;
+padding:18px
 }
 
 header{
-  text-align:center;
-  margin-bottom:20px
+text-align:center;
+margin-bottom:20px
 }
 
 header h1{
-  margin:0 0 7px;
-  font-size:30px
+margin:0 0 7px;
+font-size:30px
 }
 
 header p{
-  color:#8d96a8
+color:#8d96a8
 }
 
 .card{
-  background:#111722;
-  border:1px solid #202938;
-  border-radius:18px;
-  padding:18px;
-  margin-bottom:16px
+background:#111722;
+border:1px solid #202938;
+border-radius:18px;
+padding:18px;
+margin-bottom:16px
 }
 
 select{
-  width:100%;
-  padding:14px;
-  background:#0b1018;
-  color:#fff;
-  border:1px solid #303949;
-  border-radius:10px;
-  font-size:16px
+width:100%;
+padding:14px;
+background:#0b1018;
+color:#fff;
+border:1px solid #303949;
+border-radius:10px;
+font-size:16px
 }
 
 .top{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:15px;
-  margin-top:18px
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:15px;
+margin-top:18px
 }
 
 .pair{
-  font-size:21px;
-  font-weight:bold
+font-size:21px;
+font-weight:bold
 }
 
 .price{
-  font-size:28px;
-  font-weight:bold;
-  margin-top:7px
-}
-
-.signal{
-  padding:12px 22px;
-  border-radius:12px;
-  font-size:21px;
-  font-weight:bold;
-  background:#3a3215;
-  color:#ffd84d
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:10px;
-  margin-top:18px
-}
-
-.box{
-  background:#0b1018;
-  border:1px solid #202938;
-  border-radius:12px;
-  padding:14px
-}
-
-.label{
-  color:#8d96a8;
-  font-size:12px;
-  margin-bottom:7px
-}
-
-.value{
-  font-size:17px;
-  font-weight:bold
-}
-
-.bar{
-  height:10px;
-  background:#252d3b;
-  border-radius:20px;
-  margin-top:8px;
-  overflow:hidden
-}
-
-.fill{
-  height:100%;
-  width:0%;
-  transition:.4s
-}
-
-.status{
-  text-align:center;
-  color:#8d96a8;
-  font-size:12px;
-  margin-top:18px
-}
-
-.section-title{
-  font-size:18px;
-  font-weight:bold;
-  margin-bottom:12px
-}
-
-.tf{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:10px
-}
-
-.tfbox{
-  background:#0b1018;
-  border:1px solid #202938;
-  border-radius:12px;
-  padding:14px;
-  text-align:center
-}
-
-.tfsignal{
-  font-size:18px;
-  font-weight:bold;
-  margin-top:7px
-}
-
-.buy{
-  color:#35e28b
-}
-
-.sell{
-  color:#ff6575
-}
-
-.wait{
-  color:#ffd84d
+font-size:28px;
+font-weight:bold;
+margin-top:7px
 }
 
 .live{
-  color:#35e28b;
-  font-weight:bold
+color:#35e28b;
+font-size:12px;
+margin-top:5px
+}
+
+.signal{
+padding:12px 22px;
+border-radius:12px;
+font-size:21px;
+font-weight:bold;
+background:#3a3215;
+color:#ffd84d
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:10px;
+margin-top:18px
+}
+
+.box{
+background:#0b1018;
+border:1px solid #202938;
+border-radius:12px;
+padding:14px
+}
+
+.label{
+color:#8d96a8;
+font-size:12px;
+margin-bottom:7px
+}
+
+.value{
+font-size:17px;
+font-weight:bold
+}
+
+.bar{
+height:10px;
+background:#252d3b;
+border-radius:20px;
+margin-top:8px;
+overflow:hidden
+}
+
+.fill{
+height:100%;
+width:0%;
+transition:.4s
+}
+
+.status{
+text-align:center;
+color:#8d96a8;
+font-size:12px;
+margin-top:18px
+}
+
+.section-title{
+font-size:18px;
+font-weight:bold;
+margin-bottom:12px
+}
+
+.tf{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:10px
+}
+
+.tfbox{
+background:#0b1018;
+border:1px solid #202938;
+border-radius:12px;
+padding:14px;
+text-align:center
+}
+
+.tfsignal{
+font-size:18px;
+font-weight:bold;
+margin-top:7px
+}
+
+.buy{
+color:#35e28b
+}
+
+.sell{
+color:#ff6575
+}
+
+.wait{
+color:#ffd84d
+}
+
+.trend{
+font-size:18px;
+font-weight:bold
 }
 
 @media(max-width:600px){
-  .grid{
-    grid-template-columns:1fr 1fr
-  }
 
-  .tf{
-    grid-template-columns:1fr
-  }
+.grid{
+grid-template-columns:1fr 1fr
+}
 
-  .top{
-    align-items:flex-start
-  }
+.tf{
+grid-template-columns:1fr
+}
 
-  .price{
-    font-size:23px
-  }
+.top{
+align-items:flex-start
+}
 
-  .signal{
-    padding:10px 16px;
-    font-size:18px
-  }
+.price{
+font-size:23px
+}
+
+.signal{
+padding:10px 16px;
+font-size:18px
+}
+
 }
 </style>
 </head>
@@ -207,8 +215,6 @@ select{
 </header>
 
 
-<!-- MARKET -->
-
 <div class="card">
 
 <div class="label">SELECT MARKET</div>
@@ -222,13 +228,14 @@ select{
 <option value="XRPUSDT">XRP / USDT</option>
 <option value="ADAUSDT">ADA / USDT</option>
 <option value="DOGEUSDT">DOGE / USDT</option>
+<option value="TRXUSDT">TRX / USDT</option>
+<option value="AVAXUSDT">AVAX / USDT</option>
+<option value="LINKUSDT">LINK / USDT</option>
 
 </select>
 
 </div>
 
-
-<!-- MAIN ANALYSIS -->
 
 <div class="card">
 
@@ -245,7 +252,7 @@ Loading...
 </div>
 
 <div class="live">
-● LIVE
+● LIVE BINANCE
 </div>
 
 </div>
@@ -279,6 +286,18 @@ WAIT
 
 
 <div class="box">
+<div class="label">RISK / REWARD</div>
+<div class="value" id="rr">--</div>
+</div>
+
+
+<div class="box">
+<div class="label">TREND</div>
+<div class="value trend" id="trend">--</div>
+</div>
+
+
+<div class="box">
 <div class="label">RSI 14</div>
 <div class="value" id="rsi">--</div>
 </div>
@@ -293,6 +312,12 @@ WAIT
 <div class="box">
 <div class="label">VOLUME</div>
 <div class="value" id="volume">--</div>
+</div>
+
+
+<div class="box">
+<div class="label">SIGNAL QUALITY</div>
+<div class="value" id="quality">--</div>
 </div>
 
 
@@ -319,8 +344,6 @@ SIGNAL STRENGTH
 
 </div>
 
-
-<!-- MULTI TIMEFRAME -->
 
 <div class="card">
 
@@ -379,7 +402,6 @@ WAIT
 Connecting to Binance...
 </div>
 
-
 </div>
 
 
@@ -399,10 +421,14 @@ const signalEl=document.getElementById("signal");
 const entryEl=document.getElementById("entry");
 const slEl=document.getElementById("sl");
 const tpEl=document.getElementById("tp");
+const rrEl=document.getElementById("rr");
 
 const rsiEl=document.getElementById("rsi");
 const macdEl=document.getElementById("macd");
 const volumeEl=document.getElementById("volume");
+
+const trendEl=document.getElementById("trend");
+const qualityEl=document.getElementById("quality");
 
 const barEl=document.getElementById("bar");
 const confidenceEl=document.getElementById("confidence");
@@ -426,8 +452,7 @@ return null;
 const k=2/(n+1);
 
 let e=
-data
-.slice(0,n)
+data.slice(0,n)
 .reduce((a,b)=>a+b,0)/n;
 
 for(let i=n;i<data.length;i++){
@@ -455,7 +480,6 @@ return null;
 let gain=0;
 let loss=0;
 
-
 for(let i=1;i<=n;i++){
 
 const d=data[i]-data[i-1];
@@ -467,10 +491,8 @@ loss-=d;
 
 }
 
-
 let avgGain=gain/n;
 let avgLoss=loss/n;
-
 
 for(let i=n+1;i<data.length;i++){
 
@@ -487,10 +509,8 @@ avgLoss=
 
 }
 
-
 if(avgLoss===0)
 return 100;
-
 
 const rs=
 avgGain/avgLoss;
@@ -507,7 +527,6 @@ MACD
 function macd(data){
 
 const e12=ema(data,12);
-
 const e26=ema(data,26);
 
 if(e12===null || e26===null)
@@ -564,7 +583,7 @@ return await response.json();
 
 
 /* =========================
-BINANCE LIVE PRICE
+LIVE PRICE
 ========================= */
 
 async function getLivePrice(sym){
@@ -588,7 +607,7 @@ return Number(data.price);
 
 
 /* =========================
-ANALYSIS
+TIMEFRAME ANALYSIS
 ========================= */
 
 function analyzeTimeframe(candles){
@@ -617,7 +636,7 @@ macd(closes);
 let score=0;
 
 
-/* Price vs EMA20 */
+/* Price trend */
 
 if(current>e20)
 score+=20;
@@ -625,7 +644,7 @@ else
 score-=20;
 
 
-/* EMA20 vs EMA50 */
+/* EMA trend */
 
 if(e20>e50)
 score+=20;
@@ -666,10 +685,7 @@ if(currentVolume>previousVolume)
 score+=20;
 
 
-/* SIGNAL */
-
 let signal="WAIT";
-
 
 if(score>=60)
 signal="BUY";
@@ -685,7 +701,9 @@ score,
 price:current,
 rsi:r,
 macd:m,
-volume:currentVolume
+volume:currentVolume,
+ema20:e20,
+ema50:e50
 
 };
 
@@ -722,35 +740,25 @@ async function analyze(){
 const sym=
 symbol.value;
 
-
 try{
 
 statusEl.textContent=
 "Loading live Binance data...";
 
 
-/* Get candles */
+/* Candles */
 
 const data5=
-await getCandles(
-sym,
-"5m"
-);
+await getCandles(sym,"5m");
 
 const data15=
-await getCandles(
-sym,
-"15m"
-);
+await getCandles(sym,"15m");
 
 const data60=
-await getCandles(
-sym,
-"1h"
-);
+await getCandles(sym,"1h");
 
 
-/* Analyze */
+/* Analysis */
 
 const a5=
 analyzeTimeframe(data5);
@@ -762,7 +770,7 @@ const a60=
 analyzeTimeframe(data60);
 
 
-/* REAL LIVE PRICE */
+/* Live price */
 
 const price=
 await getLivePrice(sym);
@@ -796,20 +804,53 @@ a5.volume
 
 /* Timeframes */
 
-setTF(
-tf5,
-a5.signal
-);
+setTF(tf5,a5.signal);
+setTF(tf15,a15.signal);
+setTF(tf60,a60.signal);
 
-setTF(
-tf15,
-a15.signal
-);
 
-setTF(
-tf60,
-a60.signal
-);
+/* =========================
+TREND DETECTION
+========================= */
+
+let trend="SIDEWAYS";
+
+if(
+a5.ema20>a5.ema50 &&
+a15.ema20>a15.ema50 &&
+a60.ema20>a60.ema50
+){
+
+trend="BULLISH";
+
+trendEl.className=
+"value trend buy";
+
+}
+
+else if(
+a5.ema20<a5.ema50 &&
+a15.ema20<a15.ema50 &&
+a60.ema20<a60.ema50
+){
+
+trend="BEARISH";
+
+trendEl.className=
+"value trend sell";
+
+}
+
+else{
+
+trend="SIDEWAYS";
+
+trendEl.className=
+"value trend wait";
+
+}
+
+trendEl.textContent=trend;
 
 
 /* =========================
@@ -819,25 +860,22 @@ FINAL SIGNAL
 let finalSignal="WAIT";
 
 
-/* All timeframes BUY */
-
 if(
 a5.signal==="BUY" &&
 a15.signal==="BUY" &&
-a60.signal==="BUY"
+a60.signal==="BUY" &&
+trend==="BULLISH"
 ){
 
 finalSignal="BUY";
 
 }
 
-
-/* All timeframes SELL */
-
 else if(
 a5.signal==="SELL" &&
 a15.signal==="SELL" &&
-a60.signal==="SELL"
+a60.signal==="SELL" &&
+trend==="BEARISH"
 ){
 
 finalSignal="SELL";
@@ -845,7 +883,58 @@ finalSignal="SELL";
 }
 
 
-/* Signal UI */
+/* =========================
+SIGNAL QUALITY
+========================= */
+
+const agreement=
+[
+a5.signal,
+a15.signal,
+a60.signal
+]
+.filter(
+x=>x===finalSignal
+).length;
+
+
+let quality="WEAK";
+
+if(finalSignal==="BUY" || finalSignal==="SELL"){
+
+if(agreement===3)
+quality="STRONG";
+
+else if(agreement===2)
+quality="MEDIUM";
+
+}
+else{
+
+quality="WAIT";
+
+}
+
+
+qualityEl.textContent=
+quality;
+
+qualityEl.className=
+"value "+
+(
+quality==="STRONG"
+?"buy":
+quality==="MEDIUM"
+?"wait":
+quality==="WAIT"
+?"wait":
+"sell"
+);
+
+
+/* =========================
+SIGNAL UI
+========================= */
 
 signalEl.textContent=
 finalSignal;
@@ -960,6 +1049,22 @@ entry*1.005;
 }
 
 
+/* =========================
+RISK REWARD
+========================= */
+
+const risk=
+Math.abs(entry-sl);
+
+const reward=
+Math.abs(tp-entry);
+
+let rr=0;
+
+if(risk>0)
+rr=reward/risk;
+
+
 entryEl.textContent=
 "$"+fmt(entry);
 
@@ -969,13 +1074,15 @@ slEl.textContent=
 tpEl.textContent=
 "$"+fmt(tp);
 
+rrEl.textContent=
+"1:"+rr.toFixed(2);
+
 
 /* STATUS */
 
 statusEl.textContent=
 "● Live Binance data • Updated "+
 new Date().toLocaleTimeString();
-
 
 }
 
@@ -984,27 +1091,26 @@ catch(error){
 
 console.error(error);
 
-
 statusEl.textContent=
 "⚠️ Unable to connect to Binance";
-
 
 priceEl.textContent=
 "Unavailable";
 
-
 signalEl.textContent=
 "WAIT";
-
 
 entryEl.textContent="--";
 slEl.textContent="--";
 tpEl.textContent="--";
+rrEl.textContent="--";
 
 rsiEl.textContent="--";
 macdEl.textContent="--";
 volumeEl.textContent="--";
 
+trendEl.textContent="--";
+qualityEl.textContent="--";
 
 tf5.textContent="WAIT";
 tf15.textContent="WAIT";
@@ -1026,15 +1132,14 @@ analyze
 
 
 /* =========================
-FIRST LOAD
+INITIAL LOAD
 ========================= */
 
 analyze();
 
 
 /* =========================
-AUTO UPDATE
-30 SECONDS
+ANALYSIS EVERY 30 SECONDS
 ========================= */
 
 setInterval(
@@ -1044,8 +1149,7 @@ analyze,
 
 
 /* =========================
-LIVE PRICE UPDATE
-Every 5 seconds
+LIVE PRICE EVERY 5 SECONDS
 ========================= */
 
 setInterval(
@@ -1059,9 +1163,6 @@ symbol.value
 );
 
 priceEl.textContent=
-"$"+fmt(price);
-
-entryEl.textContent=
 "$"+fmt(price);
 
 }
