@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Trader Pro</title>
+<title>AI Trader Pro V2</title>
+
 <style>
 *{box-sizing:border-box;font-family:Arial,sans-serif}
 body{margin:0;background:#080b12;color:#fff}
-.container{max-width:950px;margin:auto;padding:18px}
+.container{max-width:1000px;margin:auto;padding:18px}
 header{text-align:center;margin-bottom:20px}
 header h1{margin:0 0 7px;font-size:30px}
 header p{color:#8d96a8}
@@ -23,8 +24,19 @@ select{width:100%;padding:14px;background:#0b1018;color:#fff;border:1px solid #3
 .value{font-size:17px;font-weight:bold}
 .bar{height:10px;background:#252d3b;border-radius:20px;margin-top:8px;overflow:hidden}
 .fill{height:100%;width:0%;transition:.4s}
-.info{text-align:center;color:#8d96a8;font-size:12px;margin-top:18px}
-@media(max-width:600px){.grid{grid-template-columns:1fr 1fr}.top{align-items:flex-start}}
+.status{text-align:center;color:#8d96a8;font-size:12px;margin-top:18px}
+.section-title{font-size:18px;font-weight:bold;margin-bottom:12px}
+.tf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tfbox{background:#0b1018;border:1px solid #202938;border-radius:12px;padding:14px;text-align:center}
+.tfsignal{font-size:18px;font-weight:bold;margin-top:7px}
+.buy{color:#35e28b}
+.sell{color:#ff6575}
+.wait{color:#ffd84d}
+@media(max-width:600px){
+.grid{grid-template-columns:1fr 1fr}
+.tf{grid-template-columns:1fr}
+.top{align-items:flex-start}
+}
 </style>
 </head>
 
@@ -33,11 +45,12 @@ select{width:100%;padding:14px;background:#0b1018;color:#fff;border:1px solid #3
 
 <header>
 <h1>🤖 AI Trader Pro</h1>
-<p>Real-Time Crypto Market Analysis</p>
+<p>Real-Time Multi-Timeframe Crypto Analysis</p>
 </header>
 
 <div class="card">
 <div class="label">SELECT MARKET</div>
+
 <select id="symbol">
 <option value="BTCUSDT">BTC / USDT</option>
 <option value="ETHUSDT">ETH / USDT</option>
@@ -56,6 +69,7 @@ select{width:100%;padding:14px;background:#0b1018;color:#fff;border:1px solid #3
 <div class="pair" id="pair">BTC / USDT</div>
 <div class="price" id="price">Loading...</div>
 </div>
+
 <div class="signal" id="signal">WAIT</div>
 </div>
 
@@ -77,18 +91,18 @@ select{width:100%;padding:14px;background:#0b1018;color:#fff;border:1px solid #3
 </div>
 
 <div class="box">
-<div class="label">RSI (14)</div>
+<div class="label">RSI 14</div>
 <div class="value" id="rsi">--</div>
 </div>
 
 <div class="box">
-<div class="label">EMA 20</div>
-<div class="value" id="ema20">--</div>
+<div class="label">MACD</div>
+<div class="value" id="macd">--</div>
 </div>
 
 <div class="box">
-<div class="label">EMA 50</div>
-<div class="value" id="ema50">--</div>
+<div class="label">VOLUME</div>
+<div class="value" id="volume">--</div>
 </div>
 
 </div>
@@ -101,179 +115,255 @@ select{width:100%;padding:14px;background:#0b1018;color:#fff;border:1px solid #3
 
 </div>
 
-<div class="info" id="status">
+<div class="card">
+<div class="section-title">Multi-Timeframe Confirmation</div>
+
+<div class="tf">
+
+<div class="tfbox">
+<div class="label">5 MIN</div>
+<div class="tfsignal wait" id="tf5">WAIT</div>
+</div>
+
+<div class="tfbox">
+<div class="label">15 MIN</div>
+<div class="tfsignal wait" id="tf15">WAIT</div>
+</div>
+
+<div class="tfbox">
+<div class="label">1 HOUR</div>
+<div class="tfsignal wait" id="tf60">WAIT</div>
+</div>
+
+</div>
+</div>
+
+<div class="status" id="status">
 Connecting to Binance...
 </div>
 
 </div>
 
 <script>
+
 const symbol=document.getElementById("symbol");
 
 const priceEl=document.getElementById("price");
 const pairEl=document.getElementById("pair");
 const signalEl=document.getElementById("signal");
-const statusEl=document.getElementById("status");
 
 const entryEl=document.getElementById("entry");
 const slEl=document.getElementById("sl");
 const tpEl=document.getElementById("tp");
 
 const rsiEl=document.getElementById("rsi");
-const ema20El=document.getElementById("ema20");
-const ema50El=document.getElementById("ema50");
+const macdEl=document.getElementById("macd");
+const volumeEl=document.getElementById("volume");
 
 const barEl=document.getElementById("bar");
 const confidenceEl=document.getElementById("confidence");
+const statusEl=document.getElementById("status");
 
-function sma(data,n){
- if(data.length<n)return null;
- let s=0;
- for(let i=data.length-n;i<data.length;i++)s+=data[i];
- return s/n;
-}
+const tf5=document.getElementById("tf5");
+const tf15=document.getElementById("tf15");
+const tf60=document.getElementById("tf60");
+
 
 function ema(data,n){
- if(data.length<n)return null;
 
- const k=2/(n+1);
- let e=sma(data.slice(0,n),n);
+if(data.length<n)return null;
 
- for(let i=n;i<data.length;i++){
-   e=data[i]*k+e*(1-k);
- }
- return e;
+const k=2/(n+1);
+
+let e=data.slice(0,n).reduce((a,b)=>a+b,0)/n;
+
+for(let i=n;i<data.length;i++){
+e=data[i]*k+e*(1-k);
 }
+
+return e;
+}
+
 
 function rsi(data,n=14){
- if(data.length<=n)return null;
 
- let gain=0,loss=0;
+if(data.length<=n)return null;
 
- for(let i=1;i<=n;i++){
-   const d=data[i]-data[i-1];
-   if(d>=0)gain+=d;
-   else loss-=d;
- }
+let gain=0;
+let loss=0;
 
- let avgGain=gain/n;
- let avgLoss=loss/n;
+for(let i=1;i<=n;i++){
 
- for(let i=n+1;i<data.length;i++){
-   const d=data[i]-data[i-1];
+const d=data[i]-data[i-1];
 
-   const g=d>0?d:0;
-   const l=d<0?-d:0;
+if(d>=0)gain+=d;
+else loss-=d;
 
-   avgGain=(avgGain*(n-1)+g)/n;
-   avgLoss=(avgLoss*(n-1)+l)/n;
- }
-
- if(avgLoss===0)return 100;
-
- const rs=avgGain/avgLoss;
- return 100-(100/(1+rs));
 }
+
+let avgGain=gain/n;
+let avgLoss=loss/n;
+
+for(let i=n+1;i<data.length;i++){
+
+const d=data[i]-data[i-1];
+
+const g=d>0?d:0;
+const l=d<0?-d:0;
+
+avgGain=(avgGain*(n-1)+g)/n;
+avgLoss=(avgLoss*(n-1)+l)/n;
+
+}
+
+if(avgLoss===0)return 100;
+
+const rs=avgGain/avgLoss;
+
+return 100-(100/(1+rs));
+}
+
+
+function macd(data){
+
+const e12=ema(data,12);
+const e26=ema(data,26);
+
+if(e12===null||e26===null)return null;
+
+return e12-e26;
+}
+
 
 function fmt(x){
- if(x===null||x===undefined)return "--";
- return Number(x).toLocaleString(undefined,{
-   minimumFractionDigits:2,
-   maximumFractionDigits:6
- });
+
+if(x===null||x===undefined||Number.isNaN(x))
+return "--";
+
+return Number(x).toLocaleString(undefined,{
+minimumFractionDigits:2,
+maximumFractionDigits:6
+});
+
 }
+
+
+async function getCandles(sym,interval){
+
+const response=await fetch(
+`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${interval}&limit=100`
+);
+
+if(!response.ok)
+throw new Error("Binance API error");
+
+return await response.json();
+
+}
+
+
+function analyzeTimeframe(candles){
+
+const closes=candles.map(x=>Number(x[4]));
+
+const current=closes[closes.length-1];
+
+const e20=ema(closes,20);
+const e50=ema(closes,50);
+const r=rsi(closes,14);
+const m=macd(closes);
+
+let score=0;
+
+if(current>e20)score+=20;
+else score-=20;
+
+if(e20>e50)score+=20;
+else score-=20;
+
+if(r>50&&r<70)score+=20;
+else if(r<50&&r>30)score-=20;
+
+if(m>0)score+=20;
+else score-=20;
+
+const previousVolume=Number(candles[candles.length-2][5]);
+const currentVolume=Number(candles[candles.length-1][5]);
+
+if(currentVolume>previousVolume)score+=20;
+
+let signal="WAIT";
+
+if(score>=60)signal="BUY";
+else if(score<=-60)signal="SELL";
+
+return{
+signal,
+score,
+price:current,
+rsi:r,
+macd:m,
+volume:currentVolume
+};
+
+}
+
+
+function setTF(element,signal){
+
+element.textContent=signal;
+
+element.className="tfsignal "+(
+signal==="BUY"?"buy":
+signal==="SELL"?"sell":"wait"
+);
+
+}
+
 
 async function analyze(){
 
- const sym=symbol.value;
+const sym=symbol.value;
 
- pairEl.textContent=sym.replace("USDT"," / USDT");
+try{
 
- try{
+statusEl.textContent="Loading live Binance data...";
 
-   const response=await fetch(
-    `https://api.binance.com/api/v3/klines?symbol=${sym}&interval=5m&limit=100`
-   );
+const data5=await getCandles(sym,"5m");
+const data15=await getCandles(sym,"15m");
+const data60=await getCandles(sym,"1h");
 
-   const candles=await response.json();
+const a5=analyzeTimeframe(data5);
+const a15=analyzeTimeframe(data15);
+const a60=analyzeTimeframe(data60);
 
-   if(!Array.isArray(candles)||candles.length<50)
-     throw new Error("Not enough data");
+const price=a5.price;
 
-   const closes=candles.map(x=>Number(x[4]));
-   const price=closes[closes.length-1];
+pairEl.textContent=sym.replace("USDT"," / USDT");
 
-   const e20=ema(closes,20);
-   const e50=ema(closes,50);
-   const r=rsi(closes,14);
+priceEl.textContent="$"+fmt(price);
 
-   priceEl.textContent="$"+fmt(price);
-   ema20El.textContent=fmt(e20);
-   ema50El.textContent=fmt(e50);
-   rsiEl.textContent=fmt(r);
+rsiEl.textContent=fmt(a5.rsi);
 
-   let score=0;
+macdEl.textContent=fmt(a5.macd);
 
-   if(price>e20)score+=25;
-   else score-=25;
+volumeEl.textContent=Number(a5.volume).toLocaleString();
 
-   if(e20>e50)score+=25;
-   else score-=25;
+setTF(tf5,a5.signal);
+setTF(tf15,a15.signal);
+setTF(tf60,a60.signal);
 
-   if(r>50&&r<70)score+=25;
-   else if(r<50&&r>30)score-=25;
 
-   const strength=Math.min(100,Math.abs(score));
+/*
+Multi-timeframe decision:
 
-   let signal="WAIT";
+BUY only when 5m + 15m + 1h agree.
+SELL only when 5m + 15m + 1h agree.
+Otherwise WAIT.
+*/
 
-   if(score>=50)signal="BUY";
-   else if(score<=-50)signal="SELL";
+let finalSignal="WAIT";
 
-   signalEl.textContent=signal;
-
-   signalEl.style.background=
-     signal==="BUY"?"#123c2a":
-     signal==="SELL"?"#421b22":"#3a3215";
-
-   signalEl.style.color=
-     signal==="BUY"?"#35e28b":
-     signal==="SELL"?"#ff6575":"#ffd84d";
-
-   confidenceEl.textContent=strength+"%";
-   barEl.style.width=strength+"%";
-
-   if(signal==="BUY"){
-     entryEl.textContent=fmt(price);
-     slEl.textContent=fmt(price*0.99);
-     tpEl.textContent=fmt(price*1.02);
-   }else if(signal==="SELL"){
-     entryEl.textContent=fmt(price);
-     slEl.textContent=fmt(price*1.01);
-     tpEl.textContent=fmt(price*0.98);
-   }else{
-     entryEl.textContent="WAIT";
-     slEl.textContent="--";
-     tpEl.textContent="--";
-   }
-
-   statusEl.textContent=
-    "Live Binance data • 5m timeframe • Updated "+new Date().toLocaleTimeString();
-
- }catch(error){
-
-   statusEl.textContent="Unable to load Binance data";
-
-   console.error(error);
- }
-}
-
-symbol.addEventListener("change",analyze);
-
-analyze();
-
-setInterval(analyze,15000);
-</script>
-
-</body>
-</html>
+if(
+a5.signal==="BUY" &&
+a15
