@@ -4,9 +4,257 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Trader Pro</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background: #080b12;
+      color: #ffffff;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    header h1 {
+      font-size: 30px;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      color: #8d96a8;
+    }
+
+    .card {
+      background: #111722;
+      border: 1px solid #202938;
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .pair {
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .price {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 6px;
+    }
+
+    .status {
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .wait {
+      background: #3a3215;
+      color: #ffd84d;
+    }
+
+    .buy {
+      background: #123c2a;
+      color: #35e28b;
+    }
+
+    .sell {
+      background: #421b22;
+      color: #ff6575;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .box {
+      background: #0b1018;
+      border-radius: 12px;
+      padding: 15px;
+      border: 1px solid #202938;
+    }
+
+    .label {
+      color: #8d96a8;
+      font-size: 13px;
+      margin-bottom: 7px;
+    }
+
+    .value {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .confidence {
+      margin-top: 20px;
+    }
+
+    .bar {
+      height: 10px;
+      background: #252d3b;
+      border-radius: 20px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .fill {
+      width: 0%;
+      height: 100%;
+      background: #ffffff;
+      transition: width 0.5s;
+    }
+
+    .info {
+      text-align: center;
+      color: #8d96a8;
+      font-size: 13px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .price {
+        font-size: 24px;
+      }
+    }
+  </style>
 </head>
+
 <body>
-  <h1>AI Trader Pro</h1>
-  <p>AI Trading Analysis Platform</p>
+
+  <div class="container">
+
+    <header>
+      <h1>🤖 AI Trader Pro</h1>
+      <p>Real-Time AI Market Analysis</p>
+    </header>
+
+    <div class="card">
+
+      <div class="top">
+        <div>
+          <div class="pair">BTC / USDT</div>
+          <div class="price" id="price">Loading...</div>
+        </div>
+
+        <div class="status wait" id="signal">
+          WAIT
+        </div>
+      </div>
+
+      <div class="grid">
+
+        <div class="box">
+          <div class="label">ENTRY</div>
+          <div class="value" id="entry">--</div>
+        </div>
+
+        <div class="box">
+          <div class="label">STOP LOSS</div>
+          <div class="value" id="sl">--</div>
+        </div>
+
+        <div class="box">
+          <div class="label">TAKE PROFIT</div>
+          <div class="value" id="tp">--</div>
+        </div>
+
+        <div class="box">
+          <div class="label">TIMEFRAME</div>
+          <div class="value">5 MIN</div>
+        </div>
+
+        <div class="box">
+          <div class="label">RSI</div>
+          <div class="value" id="rsi">--</div>
+        </div>
+
+        <div class="box">
+          <div class="label">TREND</div>
+          <div class="value" id="trend">--</div>
+        </div>
+
+      </div>
+
+      <div class="confidence">
+        <div class="label">SIGNAL STRENGTH</div>
+
+        <div class="bar">
+          <div class="fill" id="confidenceBar"></div>
+        </div>
+
+        <div style="margin-top:8px;font-weight:bold;" id="confidence">
+          0%
+        </div>
+      </div>
+
+    </div>
+
+    <div class="info">
+      Market data will be connected to the real Binance API in the next step.
+    </div>
+
+  </div>
+
+  <script>
+    const priceElement = document.getElementById("price");
+
+    async function getPrice() {
+      try {
+        const response = await fetch(
+          "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        );
+
+        const data = await response.json();
+
+        const price = Number(data.price);
+
+        priceElement.textContent =
+          "$" + price.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          });
+
+      } catch (error) {
+        priceElement.textContent = "Unavailable";
+      }
+    }
+
+    getPrice();
+
+    setInterval(getPrice, 5000);
+  </script>
+
 </body>
 </html>
