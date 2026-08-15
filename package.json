@@ -1,0 +1,12 @@
+{
+  "name": "ai-trader-pro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo Build successful",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
