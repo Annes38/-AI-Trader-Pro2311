@@ -3,85 +3,64 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Trader Pro V2</title>
+<title>AI Trader Pro V2.2</title>
 
 <style>
-*{
-box-sizing:border-box;
-font-family:Arial,sans-serif
-}
-
-body{
-margin:0;
-background:#080b12;
-color:#fff
-}
-
-.container{
-max-width:1000px;
-margin:auto;
-padding:18px
-}
-
-header{
-text-align:center;
-margin-bottom:20px
-}
-
-header h1{
-margin:0 0 7px;
-font-size:30px
-}
-
-header p{
-color:#8d96a8
-}
+*{box-sizing:border-box;font-family:Arial,sans-serif}
+body{margin:0;background:#080b12;color:#fff}
+.container{max-width:1050px;margin:auto;padding:16px}
+header{text-align:center;margin-bottom:18px}
+header h1{margin:0 0 6px;font-size:30px}
+header p{color:#8d96a8;margin:0}
 
 .card{
 background:#111722;
 border:1px solid #202938;
 border-radius:18px;
-padding:18px;
-margin-bottom:16px
+padding:16px;
+margin-bottom:14px
+}
+
+select,button{
+width:100%;
+padding:13px;
+border-radius:10px;
+font-size:16px
 }
 
 select{
-width:100%;
-padding:14px;
 background:#0b1018;
 color:#fff;
-border:1px solid #303949;
-border-radius:10px;
-font-size:16px
+border:1px solid #303949
+}
+
+button{
+border:0;
+background:#1769ff;
+color:white;
+font-weight:bold;
+cursor:pointer;
+margin-top:10px
+}
+
+button:disabled{
+opacity:.5;
+cursor:not-allowed
 }
 
 .top{
 display:flex;
 justify-content:space-between;
 align-items:center;
-gap:15px;
-margin-top:18px
+gap:15px
 }
 
-.pair{
-font-size:21px;
-font-weight:bold
-}
-
-.price{
-font-size:28px;
-font-weight:bold;
-margin-top:7px
-}
-
-.live{
-color:#35e28b;
-font-size:12px;
-margin-top:5px
-}
+.pair{font-size:21px;font-weight:bold}
+.price{font-size:28px;font-weight:bold;margin-top:6px}
+.live{font-size:11px;color:#35e28b;margin-top:5px}
 
 .signal{
-padding:12px 22px;
+padding:12px 20px;
 border-radius:12px;
 font-size:21px;
 font-weight:bold;
@@ -93,52 +72,36 @@ color:#ffd84d
 display:grid;
 grid-template-columns:repeat(3,1fr);
 gap:10px;
-margin-top:18px
+margin-top:16px
 }
 
 .box{
 background:#0b1018;
 border:1px solid #202938;
 border-radius:12px;
-padding:14px
+padding:13px
 }
 
 .label{
 color:#8d96a8;
-font-size:12px;
-margin-bottom:7px
+font-size:11px;
+margin-bottom:6px
 }
 
-.value{
-font-size:17px;
-font-weight:bold
-}
+.value{font-size:16px;font-weight:bold}
 
 .bar{
 height:10px;
 background:#252d3b;
 border-radius:20px;
-margin-top:8px;
-overflow:hidden
+overflow:hidden;
+margin-top:7px
 }
 
 .fill{
 height:100%;
 width:0%;
 transition:.4s
-}
-
-.status{
-text-align:center;
-color:#8d96a8;
-font-size:12px;
-margin-top:18px
-}
-
-.section-title{
-font-size:18px;
-font-weight:bold;
-margin-bottom:12px
 }
 
 .tf{
@@ -151,34 +114,54 @@ gap:10px
 background:#0b1018;
 border:1px solid #202938;
 border-radius:12px;
-padding:14px;
+padding:13px;
 text-align:center
 }
 
 .tfsignal{
 font-size:18px;
 font-weight:bold;
-margin-top:7px
+margin-top:6px
 }
 
-.buy{
-color:#35e28b
+.buy{color:#35e28b}
+.sell{color:#ff6575}
+.wait{color:#ffd84d}
+
+.history{
+overflow-x:auto
 }
 
-.sell{
-color:#ff6575
+table{
+width:100%;
+border-collapse:collapse;
+font-size:12px
 }
 
-.wait{
-color:#ffd84d
+th,td{
+padding:9px 6px;
+border-bottom:1px solid #202938;
+text-align:center
 }
 
-.trend{
-font-size:18px;
-font-weight:bold
+th{color:#8d96a8}
+
+.status{
+text-align:center;
+color:#8d96a8;
+font-size:12px;
+margin-top:12px
+}
+
+.small{
+font-size:11px;
+color:#8d96a8;
+line-height:1.5
 }
 
 @media(max-width:600px){
+
+.container{padding:10px}
 
 .grid{
 grid-template-columns:1fr 1fr
@@ -197,8 +180,8 @@ font-size:23px
 }
 
 .signal{
-padding:10px 16px;
-font-size:18px
+font-size:18px;
+padding:10px 14px
 }
 
 }
@@ -210,10 +193,12 @@ font-size:18px
 <div class="container">
 
 <header>
-<h1>🤖 AI Trader Pro V2</h1>
-<p>Real-Time Multi-Timeframe Crypto Analysis</p>
+<h1>🤖 AI Trader Pro V2.2</h1>
+<p>Live Multi-Timeframe Crypto Signal Engine</p>
 </header>
 
+
+<!-- MARKET -->
 
 <div class="card">
 
@@ -234,8 +219,14 @@ font-size:18px
 
 </select>
 
+<button id="analyzeBtn">
+🔍 ANALYZE NOW
+</button>
+
 </div>
 
+
+<!-- MAIN -->
 
 <div class="card">
 
@@ -266,77 +257,65 @@ WAIT
 
 <div class="grid">
 
-
 <div class="box">
 <div class="label">ENTRY</div>
 <div class="value" id="entry">--</div>
 </div>
-
 
 <div class="box">
 <div class="label">STOP LOSS</div>
 <div class="value" id="sl">--</div>
 </div>
 
-
 <div class="box">
 <div class="label">TAKE PROFIT</div>
 <div class="value" id="tp">--</div>
 </div>
-
 
 <div class="box">
 <div class="label">RISK / REWARD</div>
 <div class="value" id="rr">--</div>
 </div>
 
-
 <div class="box">
 <div class="label">TREND</div>
-<div class="value trend" id="trend">--</div>
+<div class="value" id="trend">--</div>
 </div>
-
-
-<div class="box">
-<div class="label">RSI 14</div>
-<div class="value" id="rsi">--</div>
-</div>
-
-
-<div class="box">
-<div class="label">MACD</div>
-<div class="value" id="macd">--</div>
-</div>
-
-
-<div class="box">
-<div class="label">VOLUME</div>
-<div class="value" id="volume">--</div>
-</div>
-
 
 <div class="box">
 <div class="label">SIGNAL QUALITY</div>
 <div class="value" id="quality">--</div>
 </div>
 
+<div class="box">
+<div class="label">RSI 14</div>
+<div class="value" id="rsi">--</div>
+</div>
+
+<div class="box">
+<div class="label">MACD</div>
+<div class="value" id="macd">--</div>
+</div>
+
+<div class="box">
+<div class="label">VOLUME</div>
+<div class="value" id="volume">--</div>
+</div>
 
 </div>
 
 
-<div style="margin-top:18px">
+<div style="margin-top:17px">
 
 <div class="label">
 SIGNAL STRENGTH
 </div>
 
 <div class="bar">
-
 <div class="fill" id="bar"></div>
-
 </div>
 
-<div style="margin-top:7px" id="confidence">
+<div style="margin-top:6px" id="confidence">
 0%
 </div>
 
@@ -345,55 +324,100 @@ SIGNAL STRENGTH
 </div>
 
 
+<!-- TIMEFRAMES -->
+
 <div class="card">
 
-<div class="section-title">
+<div style="font-size:18px;font-weight:bold;margin-bottom:12px">
 Multi-Timeframe Confirmation
 </div>
 
 <div class="tf">
 
+<div class="tfbox">
+<div class="label">5 MIN</div>
+<div class="tfsignal wait" id="tf5">WAIT</div>
+</div>
 
 <div class="tfbox">
-
-<div class="label">
-5 MIN
+<div class="label">15 MIN</div>
+<div class="tfsignal wait" id="tf15">WAIT</div>
 </div>
-
-<div class="tfsignal wait" id="tf5">
-WAIT
-</div>
-
-</div>
-
 
 <div class="tfbox">
-
-<div class="label">
-15 MIN
+<div class="label">1 HOUR</div>
+<div class="tfsignal wait" id="tf60">WAIT</div>
 </div>
 
-<div class="tfsignal wait" id="tf15">
-WAIT
 </div>
 
 </div>
 
 
-<div class="tfbox">
+<!-- HISTORY -->
 
-<div class="label">
-1 HOUR
+<div class="card">
+
+<div style="font-size:18px;font-weight:bold;margin-bottom:10px">
+📜 Signal History
 </div>
 
-<div class="tfsignal wait" id="tf60">
-WAIT
+<div class="history">
+
+<table>
+
+<thead>
+
+<tr>
+<th>Time</th>
+<th>Pair</th>
+<th>Signal</th>
+<th>Confidence</th>
+<th>Entry</th>
+<th>SL</th>
+<th>TP</th>
+</tr>
+
+</thead>
+
+<tbody id="historyBody"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div style="font-size:18px;font-weight:bold;margin-bottom:10px">
+📊 Performance Tracker
+</div>
+
+<div class="grid">
+
+<div class="box">
+<div class="label">TOTAL SIGNALS</div>
+<div class="value" id="totalSignals">0</div>
+</div>
+
+<div class="box">
+<div class="label">BUY SIGNALS</div>
+<div class="value" id="buySignals">0</div>
+</div>
+
+<div class="box">
+<div class="label">SELL SIGNALS</div>
+<div class="value" id="sellSignals">0</div>
 </div>
 
 </div>
 
-
-</div>
+<p class="small">
+Performance statistics are based on generated signals only.
+They do not guarantee future trading results.
+</p>
 
 </div>
 
@@ -407,37 +431,81 @@ Connecting to Binance...
 
 <script>
 
-
 /* =========================
 ELEMENTS
 ========================= */
 
-const symbol=document.getElementById("symbol");
+const symbol=
+document.getElementById("symbol");
 
-const priceEl=document.getElementById("price");
-const pairEl=document.getElementById("pair");
-const signalEl=document.getElementById("signal");
+const analyzeBtn=
+document.getElementById("analyzeBtn");
 
-const entryEl=document.getElementById("entry");
-const slEl=document.getElementById("sl");
-const tpEl=document.getElementById("tp");
-const rrEl=document.getElementById("rr");
+const priceEl=
+document.getElementById("price");
 
-const rsiEl=document.getElementById("rsi");
-const macdEl=document.getElementById("macd");
-const volumeEl=document.getElementById("volume");
+const pairEl=
+document.getElementById("pair");
 
-const trendEl=document.getElementById("trend");
-const qualityEl=document.getElementById("quality");
+const signalEl=
+document.getElementById("signal");
 
-const barEl=document.getElementById("bar");
-const confidenceEl=document.getElementById("confidence");
+const entryEl=
+document.getElementById("entry");
 
-const statusEl=document.getElementById("status");
+const slEl=
+document.getElementById("sl");
 
-const tf5=document.getElementById("tf5");
-const tf15=document.getElementById("tf15");
-const tf60=document.getElementById("tf60");
+const tpEl=
+document.getElementById("tp");
+
+const rrEl=
+document.getElementById("rr");
+
+const trendEl=
+document.getElementById("trend");
+
+const qualityEl=
+document.getElementById("quality");
+
+const rsiEl=
+document.getElementById("rsi");
+
+const macdEl=
+document.getElementById("macd");
+
+const volumeEl=
+document.getElementById("volume");
+
+const barEl=
+document.getElementById("bar");
+
+const confidenceEl=
+document.getElementById("confidence");
+
+const statusEl=
+document.getElementById("status");
+
+const tf5=
+document.getElementById("tf5");
+
+const tf15=
+document.getElementById("tf15");
+
+const tf60=
+document.getElementById("tf60");
+
+const historyBody=
+document.getElementById("historyBody");
+
+const totalSignals=
+document.getElementById("totalSignals");
+
+const buySignals=
+document.getElementById("buySignals");
+
+const sellSignals=
+document.getElementById("sellSignals");
 
 
 /* =========================
@@ -482,7 +550,8 @@ let loss=0;
 
 for(let i=1;i<=n;i++){
 
-const d=data[i]-data[i-1];
+const d=
+data[i]-data[i-1];
 
 if(d>=0)
 gain+=d;
@@ -496,7 +565,8 @@ let avgLoss=loss/n;
 
 for(let i=n+1;i<data.length;i++){
 
-const d=data[i]-data[i-1];
+const d=
+data[i]-data[i-1];
 
 const g=d>0?d:0;
 const l=d<0?-d:0;
@@ -529,7 +599,7 @@ function macd(data){
 const e12=ema(data,12);
 const e26=ema(data,26);
 
-if(e12===null || e26===null)
+if(e12===null||e26===null)
 return null;
 
 return e12-e26;
@@ -544,8 +614,8 @@ FORMAT
 function fmt(x){
 
 if(
-x===null ||
-x===undefined ||
+x===null||
+x===undefined||
 Number.isNaN(x)
 )
 return "--";
@@ -573,9 +643,7 @@ await fetch(
 );
 
 if(!response.ok)
-throw new Error(
-"Binance candles API error"
-);
+throw new Error("Candles API error");
 
 return await response.json();
 
@@ -594,9 +662,7 @@ await fetch(
 );
 
 if(!response.ok)
-throw new Error(
-"Binance price API error"
-);
+throw new Error("Price API error");
 
 const data=
 await response.json();
@@ -607,15 +673,13 @@ return Number(data.price);
 
 
 /* =========================
-TIMEFRAME ANALYSIS
+ANALYSIS
 ========================= */
 
 function analyzeTimeframe(candles){
 
 const closes=
-candles.map(
-x=>Number(x[4])
-);
+candles.map(x=>Number(x[4]));
 
 const current=
 closes[closes.length-1];
@@ -632,11 +696,10 @@ rsi(closes,14);
 const m=
 macd(closes);
 
-
 let score=0;
 
 
-/* Price trend */
+/* Price */
 
 if(current>e20)
 score+=20;
@@ -644,7 +707,7 @@ else
 score-=20;
 
 
-/* EMA trend */
+/* Trend */
 
 if(e20>e50)
 score+=20;
@@ -654,10 +717,10 @@ score-=20;
 
 /* RSI */
 
-if(r>50 && r<70)
+if(r>50&&r<70)
 score+=20;
 
-else if(r<50 && r>30)
+else if(r<50&&r>30)
 score-=20;
 
 
@@ -714,11 +777,11 @@ ema50:e50
 TIMEFRAME UI
 ========================= */
 
-function setTF(element,signal){
+function setTF(el,signal){
 
-element.textContent=signal;
+el.textContent=signal;
 
-element.className=
+el.className=
 "tfsignal "+
 (
 signal==="BUY"
@@ -732,6 +795,156 @@ signal==="SELL"
 
 
 /* =========================
+SIGNAL COLORS
+========================= */
+
+function setSignal(signal){
+
+signalEl.textContent=
+signal;
+
+if(signal==="BUY"){
+
+signalEl.style.background=
+"#123d2b";
+
+signalEl.style.color=
+"#35e28b";
+
+}
+
+else if(signal==="SELL"){
+
+signalEl.style.background=
+"#421b23";
+
+signalEl.style.color=
+"#ff6575";
+
+}
+
+else{
+
+signalEl.style.background=
+"#3a3215";
+
+signalEl.style.color=
+"#ffd84d";
+
+}
+
+}
+
+
+/* =========================
+HISTORY STORAGE
+========================= */
+
+function loadHistory(){
+
+const saved=
+localStorage.getItem(
+"aiTraderHistory"
+);
+
+if(!saved)
+return [];
+
+try{
+return JSON.parse(saved);
+}
+catch{
+return [];
+}
+
+}
+
+
+function saveHistory(history){
+
+localStorage.setItem(
+"aiTraderHistory",
+JSON.stringify(history)
+);
+
+}
+
+
+/* =========================
+ADD HISTORY
+========================= */
+
+function addHistory(record){
+
+let history=
+loadHistory();
+
+history.unshift(record);
+
+history=
+history.slice(0,30);
+
+saveHistory(history);
+
+renderHistory();
+
+}
+
+
+function renderHistory(){
+
+const history=
+loadHistory();
+
+historyBody.innerHTML="";
+
+history.forEach(item=>{
+
+const row=
+document.createElement("tr");
+
+row.innerHTML=`
+
+<td>${item.time}</td>
+<td>${item.pair}</td>
+<td class="${
+item.signal==="BUY"
+?"buy":
+item.signal==="SELL"
+?"sell":
+"wait"
+}">
+${item.signal}
+</td>
+<td>${item.confidence}%</td>
+<td>${item.entry}</td>
+<td>${item.sl}</td>
+<td>${item.tp}</td>
+
+`;
+
+historyBody.appendChild(row);
+
+});
+
+
+totalSignals.textContent=
+history.length;
+
+buySignals.textContent=
+history.filter(
+x=>x.signal==="BUY"
+).length;
+
+sellSignals.textContent=
+history.filter(
+x=>x.signal==="SELL"
+).length;
+
+}
+
+
+/* =========================
 MAIN ANALYSIS
 ========================= */
 
@@ -740,13 +953,15 @@ async function analyze(){
 const sym=
 symbol.value;
 
-try{
+analyzeBtn.disabled=true;
 
 statusEl.textContent=
-"Loading live Binance data...";
+"Analyzing live market...";
 
 
-/* Candles */
+try{
+
+/* Get data */
 
 const data5=
 await getCandles(sym,"5m");
@@ -758,7 +973,7 @@ const data60=
 await getCandles(sym,"1h");
 
 
-/* Analysis */
+/* Analyze */
 
 const a5=
 analyzeTimeframe(data5);
@@ -770,7 +985,7 @@ const a60=
 analyzeTimeframe(data60);
 
 
-/* Live price */
+/* Price */
 
 const price=
 await getLivePrice(sym);
@@ -797,9 +1012,8 @@ macdEl.textContent=
 fmt(a5.macd);
 
 volumeEl.textContent=
-Number(
-a5.volume
-).toLocaleString();
+Number(a5.volume)
+.toLocaleString();
 
 
 /* Timeframes */
@@ -809,9 +1023,7 @@ setTF(tf15,a15.signal);
 setTF(tf60,a60.signal);
 
 
-/* =========================
-TREND DETECTION
-========================= */
+/* Trend */
 
 let trend="SIDEWAYS";
 
@@ -824,7 +1036,7 @@ a60.ema20>a60.ema50
 trend="BULLISH";
 
 trendEl.className=
-"value trend buy";
+"value buy";
 
 }
 
@@ -837,7 +1049,7 @@ a60.ema20<a60.ema50
 trend="BEARISH";
 
 trendEl.className=
-"value trend sell";
+"value sell";
 
 }
 
@@ -846,16 +1058,15 @@ else{
 trend="SIDEWAYS";
 
 trendEl.className=
-"value trend wait";
+"value wait";
 
 }
 
-trendEl.textContent=trend;
+trendEl.textContent=
+trend;
 
 
-/* =========================
-FINAL SIGNAL
-========================= */
+/* Final signal */
 
 let finalSignal="WAIT";
 
@@ -883,38 +1094,38 @@ finalSignal="SELL";
 }
 
 
-/* =========================
-SIGNAL QUALITY
-========================= */
+/* Confidence */
 
-const agreement=
-[
-a5.signal,
-a15.signal,
-a60.signal
-]
-.filter(
-x=>x===finalSignal
-).length;
+let confidence=
+Math.round(
+(
+Math.abs(a5.score)+
+Math.abs(a15.score)+
+Math.abs(a60.score)
+)/3
+);
+
+if(finalSignal==="WAIT")
+confidence=
+Math.min(confidence,59);
 
 
-let quality="WEAK";
+/* Quality */
 
-if(finalSignal==="BUY" || finalSignal==="SELL"){
+let quality="WAIT";
 
-if(agreement===3)
+if(finalSignal!=="WAIT"){
+
+if(confidence>=80)
 quality="STRONG";
 
-else if(agreement===2)
+else if(confidence>=65)
 quality="MEDIUM";
 
-}
-else{
-
-quality="WAIT";
+else
+quality="WEAK";
 
 }
-
 
 qualityEl.textContent=
 quality;
@@ -926,79 +1137,16 @@ quality==="STRONG"
 ?"buy":
 quality==="MEDIUM"
 ?"wait":
-quality==="WAIT"
-?"wait":
-"sell"
+"wait"
 );
 
 
-/* =========================
-SIGNAL UI
-========================= */
+/* Signal */
 
-signalEl.textContent=
-finalSignal;
+setSignal(finalSignal);
 
 
-if(finalSignal==="BUY"){
-
-signalEl.style.background=
-"#123d2b";
-
-signalEl.style.color=
-"#35e28b";
-
-}
-
-else if(finalSignal==="SELL"){
-
-signalEl.style.background=
-"#421b23";
-
-signalEl.style.color=
-"#ff6575";
-
-}
-
-else{
-
-signalEl.style.background=
-"#3a3215";
-
-signalEl.style.color=
-"#ffd84d";
-
-}
-
-
-/* =========================
-CONFIDENCE
-========================= */
-
-const scores=[
-
-Math.abs(a5.score),
-Math.abs(a15.score),
-Math.abs(a60.score)
-
-];
-
-let confidence=
-Math.round(
-scores.reduce(
-(a,b)=>a+b,
-0
-)/3
-);
-
-
-if(finalSignal==="WAIT")
-confidence=
-Math.min(
-confidence,
-59
-);
-
+/* Bar */
 
 barEl.style.width=
 confidence+"%";
@@ -1007,9 +1155,7 @@ confidenceEl.textContent=
 confidence+"%";
 
 
-/* =========================
-ENTRY / SL / TP
-========================= */
+/* Entry */
 
 const entry=
 price;
@@ -1049,9 +1195,7 @@ entry*1.005;
 }
 
 
-/* =========================
-RISK REWARD
-========================= */
+/* Risk Reward */
 
 const risk=
 Math.abs(entry-sl);
@@ -1059,10 +1203,10 @@ Math.abs(entry-sl);
 const reward=
 Math.abs(tp-entry);
 
-let rr=0;
-
-if(risk>0)
-rr=reward/risk;
+const rr=
+risk>0
+?reward/risk
+:0;
 
 
 entryEl.textContent=
@@ -1078,47 +1222,66 @@ rrEl.textContent=
 "1:"+rr.toFixed(2);
 
 
-/* STATUS */
+/* History */
+
+addHistory({
+
+time:new Date()
+.toLocaleTimeString(),
+
+pair:sym.replace(
+"USDT",
+"/USDT"
+),
+
+signal:finalSignal,
+
+confidence:confidence,
+
+entry:fmt(entry),
+
+sl:fmt(sl),
+
+tp:fmt(tp)
+
+});
+
 
 statusEl.textContent=
-"● Live Binance data • Updated "+
-new Date().toLocaleTimeString();
+"● Analysis completed • "+
+new Date()
+.toLocaleTimeString();
 
 }
-
 
 catch(error){
 
 console.error(error);
 
 statusEl.textContent=
-"⚠️ Unable to connect to Binance";
+"⚠️ Binance connection error";
 
-priceEl.textContent=
-"Unavailable";
+setSignal("WAIT");
 
-signalEl.textContent=
-"WAIT";
+}
 
-entryEl.textContent="--";
-slEl.textContent="--";
-tpEl.textContent="--";
-rrEl.textContent="--";
+finally{
 
-rsiEl.textContent="--";
-macdEl.textContent="--";
-volumeEl.textContent="--";
-
-trendEl.textContent="--";
-qualityEl.textContent="--";
-
-tf5.textContent="WAIT";
-tf15.textContent="WAIT";
-tf60.textContent="WAIT";
+analyzeBtn.disabled=false;
 
 }
 
 }
+
+
+/* =========================
+BUTTON
+========================= */
+
+analyzeBtn.addEventListener(
+"click",
+analyze
+);
 
 
 /* =========================
@@ -1132,14 +1295,17 @@ analyze
 
 
 /* =========================
-INITIAL LOAD
+INITIAL
 ========================= */
+
+renderHistory();
 
 analyze();
 
 
 /* =========================
-ANALYSIS EVERY 30 SECONDS
+AUTO ANALYSIS
+30 SEC
 ========================= */
 
 setInterval(
@@ -1149,7 +1315,8 @@ analyze,
 
 
 /* =========================
-LIVE PRICE EVERY 5 SECONDS
+LIVE PRICE
+5 SEC
 ========================= */
 
 setInterval(
@@ -1166,6 +1333,7 @@ priceEl.textContent=
 "$"+fmt(price);
 
 }
+
 catch(e){
 
 console.log(
@@ -1178,8 +1346,7 @@ console.log(
 5000
 );
 
-
 </script>
 
 </body>
-</html>
+  </html>
