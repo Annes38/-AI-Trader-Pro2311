@@ -1,31 +1,30 @@
 const CONFIG = {
-  version: "V2.5",
+  version: "V2.6",
   feePercent: 0.1,
   slippagePercent: 0.05,
   riskPerTradePercent: 1,
-  minConfidence: 75
+  minConfidence: 70
 };
 
 const ALLOWED_INTERVALS = [60, 240];
 
 function round(value, decimals = 2) {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return null;
-  }
-
-  return Number(value.toFixed(decimals));
+  return Number.isFinite(value)
+    ? Number(value.toFixed(decimals))
+    : null;
 }
 
 function ema(values, period) {
   if (values.length < period) return null;
 
-  const multiplier = 2 / (period + 1);
+  const k = 2 / (period + 1);
 
   let result =
-    values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    values.slice(0, period).reduce((a, b) => a + b, 0) /
+    period;
 
   for (let i = period; i < values.length; i++) {
-    result = (values[i] - result) * multiplier + result;
+    result = (values[i] - result) * k + result;
   }
 
   return result;
@@ -34,60 +33,55 @@ function ema(values, period) {
 function rsi(values, period = 14) {
   if (values.length <= period) return null;
 
-  let gains = 0;
-  let losses = 0;
+  let gain = 0;
+  let loss = 0;
 
   for (let i = 1; i <= period; i++) {
     const change = values[i] - values[i - 1];
 
-    if (change > 0) {
-      gains += change;
-    } else {
-      losses += Math.abs(change);
-    }
+    if (change > 0) gain += change;
+    if (change < 0) loss += Math.abs(change);
   }
 
-  let averageGain = gains / period;
-  let averageLoss = losses / period;
+  let avgGain = gain / period;
+  let avgLoss = loss / period;
 
   for (let i = period + 1; i < values.length; i++) {
     const change = values[i] - values[i - 1];
 
-    const gain = change > 0 ? change : 0;
-    const loss = change < 0 ? Math.abs(change) : 0;
+    const g = change > 0 ? change : 0;
+    const l = change < 0 ? Math.abs(change) : 0;
 
-    averageGain =
-      ((averageGain * (period - 1)) + gain) / period;
+    avgGain =
+      ((avgGain * (period - 1)) + g) / period;
 
-    averageLoss =
-      ((averageLoss * (period - 1)) + loss) / period;
+    avgLoss =
+      ((avgLoss * (period - 1)) + l) / period;
   }
 
-  if (averageLoss === 0) return 100;
+  if (avgLoss === 0) return 100;
 
-  const rs = averageGain / averageLoss;
-
-  return 100 - 100 / (1 + rs);
+  return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
 function macd(values) {
-  const macdValues = [];
+  const lines = [];
 
   for (let i = 26; i <= values.length; i++) {
     const slice = values.slice(0, i);
 
-    const ema12 = ema(slice, 12);
-    const ema26 = ema(slice, 26);
+    const e12 = ema(slice, 12);
+    const e26 = ema(slice, 26);
 
-    if (ema12 !== null && ema26 !== null) {
-      macdValues.push(ema12 - ema26);
+    if (e12 !== null && e26 !== null) {
+      lines.push(e12 - e26);
     }
   }
 
-  if (macdValues.length < 9) return null;
+  if (lines.length < 9) return null;
 
-  const line = macdValues[macdValues.length - 1];
-  const signal = ema(macdValues, 9);
+  const line = lines[lines.length - 1];
+  const signal = ema(lines, 9);
 
   if (signal === null) return null;
 
@@ -101,54 +95,52 @@ function macd(values) {
 function atr(candles, period = 14) {
   if (candles.length <= period) return null;
 
-  const trueRanges = [];
+  const ranges = [];
 
   for (let i = 1; i < candles.length; i++) {
     const current = candles[i];
     const previous = candles[i - 1];
 
-    const trueRange = Math.max(
-      current.high - current.low,
-      Math.abs(current.high - previous.close),
-      Math.abs(current.low - previous.close)
+    ranges.push(
+      Math.max(
+        current.high - current.low,
+        Math.abs(current.high - previous.close),
+        Math.abs(current.low - previous.close)
+      )
     );
-
-    trueRanges.push(trueRange);
   }
 
-  let value =
-    trueRanges
-      .slice(0, period)
+  let result =
+    ranges.slice(0, period)
       .reduce((a, b) => a + b, 0) / period;
 
-  for (let i = period; i < trueRanges.length; i++) {
-    value =
-      ((value * (period - 1)) + trueRanges[i]) / period;
+  for (let i = period; i < ranges.length; i++) {
+    result =
+      ((result * (period - 1)) + ranges[i]) /
+      period;
   }
 
-  return value;
+  return result;
 }
 
-function calculateSignal(candles) {
-  if (candles.length < 60) {
-    return null;
-  }
+function analyze(candles) {
+  if (candles.length < 60) return null;
 
   const closes = candles.map(c => c.close);
   const price = closes[closes.length - 1];
 
-  const ema20 = ema(closes, 20);
-  const ema50 = ema(closes, 50);
-  const rsi14 = rsi(closes, 14);
-  const macdData = macd(closes);
-  const atr14 = atr(candles, 14);
+  const e20 = ema(closes, 20);
+  const e50 = ema(closes, 50);
+  const r = rsi(closes, 14);
+  const m = macd(closes);
+  const a = atr(candles, 14);
 
   if (
-    ema20 === null ||
-    ema50 === null ||
-    rsi14 === null ||
-    macdData === null ||
-    atr14 === null
+    e20 === null ||
+    e50 === null ||
+    r === null ||
+    m === null ||
+    a === null
   ) {
     return null;
   }
@@ -156,63 +148,42 @@ function calculateSignal(candles) {
   let buyScore = 0;
   let sellScore = 0;
 
-  // الاتجاه
-  if (price > ema20) buyScore++;
-  if (price < ema20) sellScore++;
+  if (price > e20) buyScore++;
+  if (price < e20) sellScore++;
 
-  if (ema20 > ema50) buyScore++;
-  if (ema20 < ema50) sellScore++;
+  if (e20 > e50) buyScore++;
+  if (e20 < e50) sellScore++;
 
-  // RSI
-  // لا نشتري إذا RSI >= 70
-  if (rsi14 >= 50 && rsi14 < 70) {
-    buyScore++;
+  if (r > 50 && r < 70) buyScore++;
+  if (r < 50 && r > 30) sellScore++;
+
+  if (m.histogram > 0) buyScore++;
+  if (m.histogram < 0) sellScore++;
+
+  let signal = "HOLD";
+
+  if (buyScore >= 3 && buyScore > sellScore) {
+    signal = "BUY";
   }
 
-  // لا نبيع إذا RSI <= 30
-  if (rsi14 <= 50 && rsi14 > 30) {
-    sellScore++;
+  if (sellScore >= 3 && sellScore > buyScore) {
+    signal = "SELL";
   }
 
-  // MACD
-  if (macdData.histogram > 0) {
-    buyScore++;
-  }
+  const score = Math.max(
+    buyScore,
+    sellScore
+  );
 
-  if (macdData.histogram < 0) {
-    sellScore++;
-  }
-
-  let action = "HOLD";
-
-  /*
-    لازم 4 شروط متوافقة
-    حتى ندخل صفقة.
-  */
-
-  if (buyScore >= 4 && rsi14 < 70) {
-    action = "BUY";
-  }
-
-  if (sellScore >= 4 && rsi14 > 30) {
-    action = "SELL";
-  }
-
-  const score = Math.max(buyScore, sellScore);
-  const confidence = Math.round((score / 4) * 100);
+  const confidence =
+    Math.round((score / 4) * 100);
 
   let stopLoss = null;
   let takeProfit1 = null;
   let takeProfit2 = null;
 
-  /*
-    ATR × 1.5 = Stop Loss
-    TP1 = 2R
-    TP2 = 2.5R
-  */
-
-  if (action === "BUY") {
-    stopLoss = price - atr14 * 1.5;
+  if (signal === "BUY") {
+    stopLoss = price - a * 1.5;
 
     const risk = price - stopLoss;
 
@@ -220,8 +191,8 @@ function calculateSignal(candles) {
     takeProfit2 = price + risk * 2.5;
   }
 
-  if (action === "SELL") {
-    stopLoss = price + atr14 * 1.5;
+  if (signal === "SELL") {
+    stopLoss = price + a * 1.5;
 
     const risk = stopLoss - price;
 
@@ -231,27 +202,28 @@ function calculateSignal(candles) {
 
   return {
     price,
-    ema20,
-    ema50,
-    rsi14,
-    macd: macdData.line,
-    macdSignal: macdData.signal,
-    macdHistogram: macdData.histogram,
-    atr14,
-
-    action,
+    ema20: e20,
+    ema50: e50,
+    rsi14: r,
+    macd: m.line,
+    macdSignal: m.signal,
+    macdHistogram: m.histogram,
+    atr14: a,
+    signal,
     confidence,
-
     buyScore,
     sellScore,
-
     stopLoss,
     takeProfit1,
     takeProfit2
   };
 }
 
-async function getKrakenCandles(pair, interval, limit = 200) {
+async function getCandles(
+  pair,
+  interval,
+  limit = 200
+) {
   const url =
     `https://api.kraken.com/0/public/OHLC` +
     `?pair=${encodeURIComponent(pair)}` +
@@ -267,112 +239,141 @@ async function getKrakenCandles(pair, interval, limit = 200) {
 
   if (!response.ok) {
     throw new Error(
-      `Kraken HTTP ${response.status}: ${text.slice(0, 300)}`
+      `Kraken HTTP ${response.status}`
     );
   }
 
   const data = JSON.parse(text);
 
-  if (data.error && data.error.length > 0) {
-    throw new Error(data.error.join(", "));
+  if (data.error && data.error.length) {
+    throw new Error(
+      data.error.join(", ")
+    );
   }
 
   const result = data.result || {};
 
-  const pairKey = Object.keys(result).find(
-    key => key !== "last"
+  const key = Object.keys(result).find(
+    k => k !== "last"
   );
 
-  if (!pairKey) {
-    throw new Error("Kraken returned no candle data");
+  if (!key) {
+    throw new Error(
+      "No Kraken candle data"
+    );
   }
 
-  return result[pairKey]
+  return result[key]
     .slice(-limit)
-    .map(candle => ({
-      time: Number(candle[0]),
-      open: Number(candle[1]),
-      high: Number(candle[2]),
-      low: Number(candle[3]),
-      close: Number(candle[4]),
-      vwap: Number(candle[5]),
-      volume: Number(candle[6]),
-      trades: Number(candle[7])
+    .map(c => ({
+      time: Number(c[0]),
+      open: Number(c[1]),
+      high: Number(c[2]),
+      low: Number(c[3]),
+      close: Number(c[4]),
+      vwap: Number(c[5]),
+      volume: Number(c[6]),
+      trades: Number(c[7])
     }));
 }
 
-async function analyzeMarket(pair, interval) {
-  const candles =
-    await getKrakenCandles(pair, interval, 200);
+function calculateTradeResult(
+  setup,
+  candles,
+  entryIndex
+) {
+  const entry = setup.price;
 
-  const result = calculateSignal(candles);
+  for (
+    let i = entryIndex + 1;
+    i < candles.length;
+    i++
+  ) {
+    const candle = candles[i];
 
-  if (!result) {
-    throw new Error("Not enough market data");
+    if (setup.signal === "BUY") {
+      const stopHit =
+        candle.low <= setup.stopLoss;
+
+      const targetHit =
+        candle.high >= setup.takeProfit1;
+
+      if (stopHit && targetHit) {
+        return {
+          outcome: "LOSS",
+          grossReturn: -1,
+          exitIndex: i
+        };
+      }
+
+      if (stopHit) {
+        return {
+          outcome: "LOSS",
+          grossReturn: -1,
+          exitIndex: i
+        };
+      }
+
+      if (targetHit) {
+        return {
+          outcome: "WIN",
+          grossReturn: 2,
+          exitIndex: i
+        };
+      }
+    }
+
+    if (setup.signal === "SELL") {
+      const stopHit =
+        candle.high >= setup.stopLoss;
+
+      const targetHit =
+        candle.low <= setup.takeProfit1;
+
+      if (stopHit && targetHit) {
+        return {
+          outcome: "LOSS",
+          grossReturn: -1,
+          exitIndex: i
+        };
+      }
+
+      if (stopHit) {
+        return {
+          outcome: "LOSS",
+          grossReturn: -1,
+          exitIndex: i
+        };
+      }
+
+      if (targetHit) {
+        return {
+          outcome: "WIN",
+          grossReturn: 2,
+          exitIndex: i
+        };
+      }
+    }
   }
 
-  let risk = "LOW";
-
-  if (result.rsi14 >= 70 || result.rsi14 <= 30) {
-    risk = "HIGH";
-  } else if (result.confidence < 85) {
-    risk = "MEDIUM";
-  }
-
-  return {
-    success: true,
-
-    project: "AI Trader Pro",
-    version: CONFIG.version,
-
-    pair,
-    interval: `${interval}m`,
-    source: "Kraken",
-
-    market: {
-      price: round(result.price),
-      candles: candles.length
-    },
-
-    indicators: {
-      rsi14: round(result.rsi14),
-      ema20: round(result.ema20),
-      ema50: round(result.ema50),
-      macd: round(result.macd, 4),
-      macdSignal: round(result.macdSignal, 4),
-      macdHistogram: round(result.macdHistogram, 4),
-      atr14: round(result.atr14)
-    },
-
-    analysis: {
-      signal: result.action,
-      confidence: result.confidence,
-      buyScore: result.buyScore,
-      sellScore: result.sellScore,
-      risk
-    },
-
-    riskManagement: {
-      entry: round(result.price),
-      stopLoss: round(result.stopLoss),
-      takeProfit1: round(result.takeProfit1),
-      takeProfit2: round(result.takeProfit2),
-      riskReward: "1:2 / 1:2.5",
-      riskPerTradePercent:
-        CONFIG.riskPerTradePercent
-    },
-
-    timestamp: new Date().toISOString()
-  };
+  return null;
 }
 
-async function runBacktest(
+async function backtest(
   pair,
   interval,
   limit = 200
 ) {
   const candles =
-    await getKrakenCandles(pair, interval, limit);
+    await getCandles(
+      pair,
+      interval,
+      limit
+    );
+
+  let equity = 100;
+  let peak = 100;
+  let maxDrawdown = 0;
 
   let wins = 0;
   let losses = 0;
@@ -380,89 +381,58 @@ async function runBacktest(
   let grossProfit = 0;
   let grossLoss = 0;
 
-  let equity = 100;
-  let peakEquity = 100;
-  let maxDrawdown = 0;
-
   const trades = [];
 
-  for (let i = 60; i < candles.length - 1; i++) {
-    const history = candles.slice(0, i + 1);
+  let nextAvailableIndex = 60;
 
-    const setup = calculateSignal(history);
+  for (
+    let i = 60;
+    i < candles.length - 1;
+    i++
+  ) {
+    if (i < nextAvailableIndex) {
+      continue;
+    }
+
+    const history =
+      candles.slice(0, i + 1);
+
+    const setup =
+      analyze(history);
 
     if (!setup) continue;
 
     if (
-      setup.action !== "BUY" &&
-      setup.action !== "SELL"
+      setup.signal !== "BUY" &&
+      setup.signal !== "SELL"
     ) {
       continue;
     }
 
-    /*
-      لا ندخل إلا إذا كانت الثقة
-      75% أو أكثر.
-    */
-
-    if (setup.confidence < CONFIG.minConfidence) {
+    if (
+      setup.confidence <
+      CONFIG.minConfidence
+    ) {
       continue;
     }
 
-    const nextCandle = candles[i + 1];
+    const result =
+      calculateTradeResult(
+        setup,
+        candles,
+        i
+      );
 
-    let outcome = null;
-    let grossReturn = 0;
+    if (!result) continue;
 
-    if (setup.action === "BUY") {
-      const hitStop =
-        nextCandle.low <= setup.stopLoss;
-
-      const hitTarget =
-        nextCandle.high >= setup.takeProfit1;
-
-      /*
-        إذا ضرب Stop وTP في نفس الشمعة،
-        نحسبها خسارة بشكل محافظ.
-      */
-
-      if (hitStop) {
-        outcome = "LOSS";
-        grossReturn = -1;
-      } else if (hitTarget) {
-        outcome = "WIN";
-        grossReturn = 2;
-      }
-    }
-
-    if (setup.action === "SELL") {
-      const hitStop =
-        nextCandle.high >= setup.stopLoss;
-
-      const hitTarget =
-        nextCandle.low <= setup.takeProfit1;
-
-      if (hitStop) {
-        outcome = "LOSS";
-        grossReturn = -1;
-      } else if (hitTarget) {
-        outcome = "WIN";
-        grossReturn = 2;
-      }
-    }
-
-    if (outcome === null) {
-      continue;
-    }
-
-    const tradingCosts =
-      CONFIG.feePercent * 2 +
-      CONFIG.slippagePercent * 2;
+    const costs =
+      (CONFIG.feePercent * 2) +
+      (CONFIG.slippagePercent * 2);
 
     const netReturn =
-      grossReturn - tradingCosts;
+      result.grossReturn - costs;
 
-    if (outcome === "WIN") {
+    if (result.outcome === "WIN") {
       wins++;
       grossProfit += netReturn;
     } else {
@@ -471,26 +441,35 @@ async function runBacktest(
     }
 
     equity =
-      equity * (1 + netReturn / 100);
+      equity *
+      (1 + netReturn / 100);
 
-    peakEquity =
-      Math.max(peakEquity, equity);
+    peak =
+      Math.max(peak, equity);
 
     const drawdown =
-      ((peakEquity - equity) /
-        peakEquity) * 100;
+      ((peak - equity) /
+        peak) * 100;
 
     maxDrawdown =
-      Math.max(maxDrawdown, drawdown);
+      Math.max(
+        maxDrawdown,
+        drawdown
+      );
 
     trades.push({
-      time: new Date(
-        nextCandle.time * 1000
-      ).toISOString(),
+      time:
+        new Date(
+          candles[
+            result.exitIndex
+          ].time * 1000
+        ).toISOString(),
 
-      signal: setup.action,
+      signal: setup.signal,
 
-      entry: round(setup.price),
+      entry: round(
+        entryPrice(setup)
+      ),
 
       stopLoss: round(
         setup.stopLoss
@@ -500,25 +479,35 @@ async function runBacktest(
         setup.takeProfit1
       ),
 
-      outcome,
+      outcome:
+        result.outcome,
 
-      grossReturn: round(
-        grossReturn,
-        3
-      ),
+      grossReturn:
+        round(
+          result.grossReturn,
+          3
+        ),
 
-      netReturn: round(
-        netReturn,
-        3
-      )
+      netReturn:
+        round(
+          netReturn,
+          3
+        )
     });
+
+    /*
+      لا نفتح صفقة جديدة
+      حتى تنتهي الصفقة الحالية.
+    */
+    nextAvailableIndex =
+      result.exitIndex + 1;
   }
 
   const totalTrades =
     wins + losses;
 
   const winRate =
-    totalTrades > 0
+    totalTrades
       ? (wins / totalTrades) * 100
       : 0;
 
@@ -530,47 +519,81 @@ async function runBacktest(
   return {
     success: true,
 
-    project: "AI Trader Pro",
-    version: CONFIG.version,
+    project:
+      "AI Trader Pro",
+
+    version:
+      CONFIG.version,
 
     pair,
-    interval: `${interval}m`,
-    source: "Kraken",
+
+    interval:
+      `${interval}m`,
+
+    source:
+      "Kraken",
 
     configuration: {
-      feePercent: CONFIG.feePercent,
+      feePercent:
+        CONFIG.feePercent,
+
       slippagePercent:
         CONFIG.slippagePercent,
+
       riskPerTradePercent:
         CONFIG.riskPerTradePercent,
+
       minimumConfidence:
         CONFIG.minConfidence,
-      riskReward: "1:2"
+
+      riskReward:
+        "1:2"
     },
 
     backtest: {
-      candlesTested: candles.length,
-      trades: totalTrades,
+      candlesTested:
+        candles.length,
+
+      trades:
+        totalTrades,
+
       wins,
+
       losses,
-      winRate: round(winRate),
+
+      winRate:
+        round(winRate),
+
       profitFactor:
-        round(profitFactor, 3),
-      netReturn: round(
-        equity - 100,
-        3
-      ),
-      startingEquity: 100,
-      endingEquity: round(
-        equity,
-        3
-      ),
+        round(
+          profitFactor,
+          3
+        ),
+
+      netReturn:
+        round(
+          equity - 100,
+          3
+        ),
+
+      startingEquity:
+        100,
+
+      endingEquity:
+        round(
+          equity,
+          3
+        ),
+
       maxDrawdown:
-        round(maxDrawdown, 3)
+        round(
+          maxDrawdown,
+          3
+        )
     },
 
     note:
-      "Historical simulation only. Fees and slippage included. This does not guarantee future performance.",
+      "Historical simulation only. Fees and slippage included. No guarantee of future performance.",
 
     recentTrades:
       trades.slice(-20),
@@ -578,6 +601,10 @@ async function runBacktest(
     timestamp:
       new Date().toISOString()
   };
+}
+
+function entryPrice(setup) {
+  return setup.price;
 }
 
 function json(data, status = 200) {
@@ -588,6 +615,7 @@ function json(data, status = 200) {
       headers: {
         "Content-Type":
           "application/json; charset=utf-8",
+
         "Cache-Control":
           "no-store"
       }
@@ -600,37 +628,46 @@ export default {
     const url =
       new URL(request.url);
 
-    /*
-      HOME
-    */
-
-    if (url.pathname === "/") {
+    if (
+      url.pathname === "/"
+    ) {
       return json({
-        name: "AI Trader Pro",
-        version: CONFIG.version,
-        status: "online",
-        mode: "analysis-only",
-        marketData: "Kraken",
-        realTrading: false,
+        name:
+          "AI Trader Pro",
+
+        version:
+          CONFIG.version,
+
+        status:
+          "online",
+
+        marketData:
+          "Kraken",
+
+        realTrading:
+          false,
+
         message:
           "AI Trader Pro API is running"
       });
     }
-
-    /*
-      STATUS
-    */
 
     if (
       url.pathname ===
       "/api/status"
     ) {
       return json({
-        project: "AI Trader Pro",
-        version: CONFIG.version,
-        status: "online",
+        project:
+          "AI Trader Pro",
 
-        marketData: "Kraken",
+        version:
+          CONFIG.version,
+
+        status:
+          "online",
+
+        marketData:
+          "Kraken",
 
         indicators: [
           "RSI14",
@@ -641,23 +678,21 @@ export default {
         ],
 
         strategy:
-          "4-condition confirmation",
+          "3-condition confirmation",
 
         riskReward:
-          "1:2 / 1:2.5",
+          "1:2",
 
-        backtesting: true,
+        backtesting:
+          true,
 
-        realTrading: false,
+        realTrading:
+          false,
 
         timestamp:
           new Date().toISOString()
       });
     }
-
-    /*
-      MARKET ANALYSIS
-    */
 
     if (
       url.pathname ===
@@ -665,7 +700,9 @@ export default {
     ) {
       const pair =
         (
-          url.searchParams.get("pair") ||
+          url.searchParams.get(
+            "pair"
+          ) ||
           "XBTUSD"
         ).toUpperCase();
 
@@ -694,12 +731,147 @@ export default {
       }
 
       try {
-        return json(
-          await analyzeMarket(
+        const candles =
+          await getCandles(
             pair,
-            interval
-          )
-        );
+            interval,
+            200
+          );
+
+        const result =
+          analyze(candles);
+
+        if (!result) {
+          throw new Error(
+            "Not enough data"
+          );
+        }
+
+        let risk = "LOW";
+
+        if (
+          result.rsi14 >= 70 ||
+          result.rsi14 <= 30
+        ) {
+          risk = "HIGH";
+        } else if (
+          result.confidence < 80
+        ) {
+          risk = "MEDIUM";
+        }
+
+        return json({
+          success: true,
+
+          project:
+            "AI Trader Pro",
+
+          version:
+            CONFIG.version,
+
+          pair,
+
+          interval:
+            `${interval}m`,
+
+          source:
+            "Kraken",
+
+          market: {
+            price:
+              round(
+                result.price
+              ),
+
+            candles:
+              candles.length
+          },
+
+          indicators: {
+            rsi14:
+              round(
+                result.rsi14
+              ),
+
+            ema20:
+              round(
+                result.ema20
+              ),
+
+            ema50:
+              round(
+                result.ema50
+              ),
+
+            macd:
+              round(
+                result.macd,
+                4
+              ),
+
+            macdSignal:
+              round(
+                result.macdSignal,
+                4
+              ),
+
+            macdHistogram:
+              round(
+                result.macdHistogram,
+                4
+              ),
+
+            atr14:
+              round(
+                result.atr14
+              )
+          },
+
+          analysis: {
+            signal:
+              result.signal,
+
+            confidence:
+              result.confidence,
+
+            buyScore:
+              result.buyScore,
+
+            sellScore:
+              result.sellScore,
+
+            risk
+          },
+
+          riskManagement: {
+            entry:
+              round(
+                result.price
+              ),
+
+            stopLoss:
+              round(
+                result.stopLoss
+              ),
+
+            takeProfit1:
+              round(
+                result.takeProfit1
+              ),
+
+            takeProfit2:
+              round(
+                result.takeProfit2
+              ),
+
+            riskReward:
+              "1:2 / 1:2.5"
+          },
+
+          timestamp:
+            new Date().toISOString()
+        });
+
       } catch (error) {
         return json(
           {
@@ -714,17 +886,15 @@ export default {
       }
     }
 
-    /*
-      BACKTEST
-    */
-
     if (
       url.pathname ===
       "/api/backtest"
     ) {
       const pair =
         (
-          url.searchParams.get("pair") ||
+          url.searchParams.get(
+            "pair"
+          ) ||
           "XBTUSD"
         ).toUpperCase();
 
@@ -767,12 +937,13 @@ export default {
 
       try {
         return json(
-          await runBacktest(
+          await backtest(
             pair,
             interval,
             limit
           )
         );
+
       } catch (error) {
         return json(
           {
@@ -787,13 +958,10 @@ export default {
       }
     }
 
-    /*
-      UNKNOWN ROUTE
-    */
-
     return json(
       {
-        error: "Not Found",
+        error:
+          "Not Found",
 
         availableEndpoints: [
           "/",
