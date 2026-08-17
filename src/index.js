@@ -1,5 +1,5 @@
 export default {
-  async fetch(request, env) {
+  async fetch(request) {
     const url = new URL(request.url);
 
     if (url.pathname === "/") {
@@ -20,13 +20,27 @@ export default {
     }
 
     if (url.pathname === "/api/price") {
-      const symbol = url.searchParams.get("symbol") || "BTCUSDT";
+      const symbol = (
+        url.searchParams.get("symbol") || "BTCUSDT"
+      ).toUpperCase();
+
+      const assets = {
+        BTCUSDT: "bitcoin",
+        ETHUSDT: "ethereum"
+      };
+
+      const asset = assets[symbol];
+
+      if (!asset) {
+        return Response.json(
+          { error: "Supported symbols: BTCUSDT, ETHUSDT" },
+          { status: 400 }
+        );
+      }
 
       try {
-        const coin = symbol.replace("USDT", "").toLowerCase();
-
         const response = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coin}&vs_currencies=usd`
+          `https://api.coincap.io/v2/assets/${asset}`
         );
 
         if (!response.ok) {
@@ -36,20 +50,13 @@ export default {
           );
         }
 
-        const data = await response.json();
-
-        if (!data[coin] || data[coin].usd === undefined) {
-          return Response.json(
-            { error: "Coin not found" },
-            { status: 404 }
-          );
-        }
+        const result = await response.json();
 
         return Response.json({
           symbol,
-          price: data[coin].usd,
+          price: Number(result.data.priceUsd),
           currency: "USD",
-          source: "CoinGecko",
+          source: "CoinCap",
           timestamp: Date.now()
         });
 
