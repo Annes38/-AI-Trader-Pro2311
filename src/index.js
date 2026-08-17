@@ -3,10 +3,19 @@ const PAIRS = {
   ETHUSD: "ETH"
 };
 
+function round(value, decimals = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Number(value.toFixed(decimals));
+}
+
 function ema(values, period) {
   if (values.length < period) return null;
 
   const multiplier = 2 / (period + 1);
+
   let result =
     values.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
@@ -27,11 +36,8 @@ function rsi(values, period = 14) {
   for (let i = 1; i <= period; i++) {
     const change = values[i] - values[i - 1];
 
-    if (change >= 0) {
-      gains += change;
-    } else {
-      losses += Math.abs(change);
-    }
+    if (change > 0) gains += change;
+    if (change < 0) losses += Math.abs(change);
   }
 
   let averageGain = gains / period;
@@ -52,10 +58,9 @@ function rsi(values, period = 14) {
 
   if (averageLoss === 0) return 100;
 
-  const relativeStrength =
-    averageGain / averageLoss;
+  const rs = averageGain / averageLoss;
 
-  return 100 - (100 / (1 + relativeStrength));
+  return 100 - 100 / (1 + rs);
 }
 
 function macd(values) {
@@ -66,9 +71,6 @@ function macd(values) {
     return null;
   }
 
-  const macdLine = ema12 - ema26;
-
-  // حساب تقريبي للـSignal Line باستعمال آخر قيم MACD
   const macdValues = [];
 
   for (let i = 26; i <= values.length; i++) {
@@ -77,10 +79,10 @@ function macd(values) {
     const e12 = ema(slice, 12);
     const e26 = ema(slice, 26);
 
-    if (e12 !== null && e26 !== null) {
-      macdValues.push(e12 - e26);
-    }
+    macdValues.push(e12 - e26);
   }
+
+  const macdLine = macdValues[macdValues.length - 1];
 
   const signalLine =
     macdValues.length >= 9
@@ -99,12 +101,37 @@ function macd(values) {
   };
 }
 
-function round(value, decimals = 4) {
-  if (value === null || value === undefined) {
-    return null;
+function atr(candles, period = 14) {
+  if (candles.length <= period) return null;
+
+  const trueRanges = [];
+
+  for (let i = 1; i < candles.length; i++) {
+    const current = candles[i];
+    const previous = candles[i - 1];
+
+    const range1 = current.high - current.low;
+    const range2 = Math.abs(current.high - previous.close);
+    const range3 = Math.abs(current.low - previous.close);
+
+    trueRanges.push(
+      Math.max(range1, range2, range3)
+    );
   }
 
-  return Number(value.toFixed(decimals));
+  if (trueRanges.length < period) return null;
+
+  let value =
+    trueRanges
+      .slice(0, period)
+      .reduce((a, b) => a + b, 0) / period;
+
+  for (let i = period; i < trueRanges.length; i++) {
+    value =
+      ((value * (period - 1)) + trueRanges[i]) / period;
+  }
+
+  return value;
 }
 
 async function getKrakenCandles(pair, interval, limit = 200) {
@@ -138,7 +165,7 @@ async function getKrakenCandles(pair, interval, limit = 200) {
     throw new Error("No candle data returned");
   }
 
-  const candles = result.result[key]
+  return result.result[key]
     .slice(-limit)
     .map((c) => ({
       time: Number(c[0]),
@@ -150,21 +177,13 @@ async function getKrakenCandles(pair, interval, limit = 200) {
       volume: Number(c[6]),
       trades: Number(c[7])
     }));
-
-  return candles;
 }
 
 async function analyzeMarket(pair, interval) {
-  const candles = await getKrakenCandles(
-    pair,
-    interval,
-    200
-  );
+  const candles = await getKrakenCandles(pair, interval, 200);
 
   if (candles.length < 60) {
-    throw new Error(
-      `Not enough candles: ${candles.length}`
-    );
+    throw new Error(`Not enough candles: ${candles.length}`);
   }
 
   const closes = candles.map((c) => c.close);
@@ -178,16 +197,19 @@ async function analyzeMarket(pair, interval) {
 
   const macdData = macd(closes);
 
+  const atr14 = atr(candles, 14);
+
   let bullishPoints = 0;
   let bearishPoints = 0;
 
-  // EMA trend
+  // EMA 20
   if (price > ema20) {
     bullishPoints++;
   } else {
     bearishPoints++;
   }
 
+  // EMA 20 vs EMA 50
   if (ema20 > ema50) {
     bullishPoints++;
   } else {
@@ -204,10 +226,7 @@ async function analyzeMarket(pair, interval) {
   }
 
   // MACD
-  if (
-    macdData &&
-    macdData.histogram !== null
-  ) {
+  if (macdData?.histogram !== null) {
     if (macdData.histogram > 0) {
       bullishPoints++;
     } else {
@@ -223,16 +242,13 @@ async function analyzeMarket(pair, interval) {
     signal = "SELL";
   }
 
-  const totalPoints = 4;
-
-  const strongest =
-    Math.max(
-      bullishPoints,
-      bearishPoints
-    );
+  const strongest = Math.max(
+    bullishPoints,
+    bearishPoints
+  );
 
   const confidence = Math.round(
-    (strongest / totalPoints) * 100
+    (strongest / 4) * 100
   );
 
   let trend = "SIDEWAYS";
@@ -245,43 +261,96 @@ async function analyzeMarket(pair, interval) {
 
   let risk = "MEDIUM";
 
-  if (
-    rsi14 !== null &&
-    (rsi14 >= 70 || rsi14 <= 30)
-  ) {
+  if (rsi14 >= 70 || rsi14 <= 30) {
     risk = "HIGH";
   } else if (confidence >= 75) {
     risk = "LOW";
   }
 
+  // =========================
+  // RISK MANAGEMENT
+  // =========================
+
+  let entry = price;
+  let stopLoss = null;
+  let takeProfit1 = null;
+  let takeProfit2 = null;
+  let riskRewardTP1 = null;
+  let riskRewardTP2 = null;
+
+  if (atr14 !== null) {
+    if (signal === "BUY") {
+      entry = price;
+
+      stopLoss = price - (atr14 * 1.5);
+
+      const riskAmount = entry - stopLoss;
+
+      takeProfit1 = entry + (riskAmount * 1.5);
+      takeProfit2 = entry + (riskAmount * 2.5);
+
+      riskRewardTP1 = 1.5;
+      riskRewardTP2 = 2.5;
+    }
+
+    if (signal === "SELL") {
+      entry = price;
+
+      stopLoss = price + (atr14 * 1.5);
+
+      const riskAmount = stopLoss - entry;
+
+      takeProfit1 = entry - (riskAmount * 1.5);
+      takeProfit2 = entry - (riskAmount * 2.5);
+
+      riskRewardTP1 = 1.5;
+      riskRewardTP2 = 2.5;
+    }
+  }
+
+  // تشديد الخطر إذا RSI متشبع
+  if (
+    signal === "BUY" &&
+    rsi14 >= 70
+  ) {
+    risk = "HIGH";
+  }
+
+  if (
+    signal === "SELL" &&
+    rsi14 <= 30
+  ) {
+    risk = "HIGH";
+  }
+
   return {
     success: true,
+
     pair,
+
     asset: PAIRS[pair] || pair,
+
     interval: `${interval}m`,
 
     market: {
-      price: round(price, 2),
+      price: round(price),
       candles: candles.length,
       source: "Kraken"
     },
 
     indicators: {
       rsi14: round(rsi14, 2),
-      ema20: round(ema20, 2),
-      ema50: round(ema50, 2),
+      ema20: round(ema20),
+      ema50: round(ema50),
 
-      macd: macdData
-        ? round(macdData.macd, 4)
-        : null,
+      macd: round(macdData?.macd, 4),
+      macdSignal: round(macdData?.signal, 4),
+      macdHistogram: round(
+        macdData?.histogram,
+        4
+      ),
 
-      macdSignal: macdData
-        ? round(macdData.signal, 4)
-        : null,
-
-      macdHistogram: macdData
-        ? round(macdData.histogram, 4)
-        : null
+      atr14: round(atr14)
     },
 
     analysis: {
@@ -289,6 +358,18 @@ async function analyzeMarket(pair, interval) {
       signal,
       confidence,
       risk
+    },
+
+    riskManagement: {
+      entry: round(entry),
+      stopLoss: round(stopLoss),
+      takeProfit1: round(takeProfit1),
+      takeProfit2: round(takeProfit2),
+
+      riskReward: {
+        tp1: riskRewardTP1,
+        tp2: riskRewardTP2
+      }
     },
 
     timestamp: new Date().toISOString()
@@ -322,20 +403,20 @@ export default {
         project: "AI Trader Pro",
         version: "V2.2",
         marketData: "CoinMarketCap + Kraken",
-        analysis: "RSI + EMA + MACD"
+        analysis: "RSI + EMA + MACD + ATR",
+        riskManagement: "Active"
       });
     }
 
     // =========================
-    // CURRENT PRICE
+    // PRICE
     // =========================
 
     if (url.pathname === "/api/price") {
-      const symbol =
-        (
-          url.searchParams.get("symbol") ||
-          "BTCUSDT"
-        ).toUpperCase();
+      const symbol = (
+        url.searchParams.get("symbol") ||
+        "BTCUSDT"
+      ).toUpperCase();
 
       const ids = {
         BTCUSDT: 1,
@@ -371,7 +452,6 @@ export default {
         }
 
         const result = JSON.parse(body);
-
         const coin = result?.data?.[0];
 
         if (!coin) {
@@ -410,11 +490,10 @@ export default {
     // =========================
 
     if (url.pathname === "/api/candles") {
-      const pair =
-        (
-          url.searchParams.get("pair") ||
-          "XBTUSD"
-        ).toUpperCase();
+      const pair = (
+        url.searchParams.get("pair") ||
+        "XBTUSD"
+      ).toUpperCase();
 
       const interval =
         Number(
@@ -470,15 +549,14 @@ export default {
     }
 
     // =========================
-    // AI TRADER ANALYSIS
+    // ANALYSIS + RISK
     // =========================
 
     if (url.pathname === "/api/analyze") {
-      const pair =
-        (
-          url.searchParams.get("pair") ||
-          "XBTUSD"
-        ).toUpperCase();
+      const pair = (
+        url.searchParams.get("pair") ||
+        "XBTUSD"
+      ).toUpperCase();
 
       const interval =
         Number(
