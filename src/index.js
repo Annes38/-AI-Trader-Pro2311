@@ -1,30 +1,37 @@
 const CONFIG = {
-  version: "V2.6",
+  version: "V2.7",
+
   feePercent: 0.1,
   slippagePercent: 0.05,
+
   riskPerTradePercent: 1,
-  minConfidence: 70
+
+  minConfidence: 75,
+
+  riskReward: 2,
+
+  maxHoldingCandles: 12
 };
 
 const ALLOWED_INTERVALS = [60, 240];
 
 function round(value, decimals = 2) {
-  return Number.isFinite(value)
-    ? Number(value.toFixed(decimals))
-    : null;
+  if (!Number.isFinite(value)) return null;
+  return Number(value.toFixed(decimals));
 }
 
 function ema(values, period) {
   if (values.length < period) return null;
 
-  const k = 2 / (period + 1);
+  const multiplier = 2 / (period + 1);
 
   let result =
     values.slice(0, period).reduce((a, b) => a + b, 0) /
     period;
 
   for (let i = period; i < values.length; i++) {
-    result = (values[i] - result) * k + result;
+    result =
+      (values[i] - result) * multiplier + result;
   }
 
   return result;
@@ -33,114 +40,190 @@ function ema(values, period) {
 function rsi(values, period = 14) {
   if (values.length <= period) return null;
 
-  let gain = 0;
-  let loss = 0;
+  let gains = 0;
+  let losses = 0;
 
   for (let i = 1; i <= period; i++) {
-    const change = values[i] - values[i - 1];
+    const change =
+      values[i] - values[i - 1];
 
-    if (change > 0) gain += change;
-    if (change < 0) loss += Math.abs(change);
+    if (change > 0) gains += change;
+    if (change < 0) losses += Math.abs(change);
   }
 
-  let avgGain = gain / period;
-  let avgLoss = loss / period;
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
 
-  for (let i = period + 1; i < values.length; i++) {
-    const change = values[i] - values[i - 1];
+  for (
+    let i = period + 1;
+    i < values.length;
+    i++
+  ) {
+    const change =
+      values[i] - values[i - 1];
 
-    const g = change > 0 ? change : 0;
-    const l = change < 0 ? Math.abs(change) : 0;
+    const gain =
+      change > 0 ? change : 0;
+
+    const loss =
+      change < 0 ? Math.abs(change) : 0;
 
     avgGain =
-      ((avgGain * (period - 1)) + g) / period;
+      ((avgGain * (period - 1)) + gain) /
+      period;
 
     avgLoss =
-      ((avgLoss * (period - 1)) + l) / period;
+      ((avgLoss * (period - 1)) + loss) /
+      period;
   }
 
   if (avgLoss === 0) return 100;
 
-  return 100 - 100 / (1 + avgGain / avgLoss);
+  const rs = avgGain / avgLoss;
+
+  return 100 - 100 / (1 + rs);
 }
 
 function macd(values) {
   const lines = [];
 
-  for (let i = 26; i <= values.length; i++) {
-    const slice = values.slice(0, i);
+  for (
+    let i = 26;
+    i <= values.length;
+    i++
+  ) {
+    const slice =
+      values.slice(0, i);
 
-    const e12 = ema(slice, 12);
-    const e26 = ema(slice, 26);
+    const e12 =
+      ema(slice, 12);
 
-    if (e12 !== null && e26 !== null) {
+    const e26 =
+      ema(slice, 26);
+
+    if (
+      e12 !== null &&
+      e26 !== null
+    ) {
       lines.push(e12 - e26);
     }
   }
 
-  if (lines.length < 9) return null;
+  if (lines.length < 9) {
+    return null;
+  }
 
-  const line = lines[lines.length - 1];
-  const signal = ema(lines, 9);
+  const line =
+    lines[lines.length - 1];
 
-  if (signal === null) return null;
+  const signal =
+    ema(lines, 9);
+
+  if (signal === null) {
+    return null;
+  }
 
   return {
     line,
     signal,
-    histogram: line - signal
+    histogram:
+      line - signal
   };
 }
 
 function atr(candles, period = 14) {
-  if (candles.length <= period) return null;
+  if (candles.length <= period) {
+    return null;
+  }
 
   const ranges = [];
 
-  for (let i = 1; i < candles.length; i++) {
-    const current = candles[i];
-    const previous = candles[i - 1];
+  for (
+    let i = 1;
+    i < candles.length;
+    i++
+  ) {
+    const current =
+      candles[i];
 
-    ranges.push(
+    const previous =
+      candles[i - 1];
+
+    const range =
       Math.max(
-        current.high - current.low,
-        Math.abs(current.high - previous.close),
-        Math.abs(current.low - previous.close)
-      )
-    );
+        current.high -
+          current.low,
+
+        Math.abs(
+          current.high -
+          previous.close
+        ),
+
+        Math.abs(
+          current.low -
+          previous.close
+        )
+      );
+
+    ranges.push(range);
   }
 
-  let result =
-    ranges.slice(0, period)
-      .reduce((a, b) => a + b, 0) / period;
+  let value =
+    ranges
+      .slice(0, period)
+      .reduce(
+        (a, b) => a + b,
+        0
+      ) / period;
 
-  for (let i = period; i < ranges.length; i++) {
-    result =
-      ((result * (period - 1)) + ranges[i]) /
+  for (
+    let i = period;
+    i < ranges.length;
+    i++
+  ) {
+    value =
+      ((value * (period - 1)) +
+        ranges[i]) /
       period;
   }
 
-  return result;
+  return value;
 }
 
 function analyze(candles) {
-  if (candles.length < 60) return null;
+  if (candles.length < 60) {
+    return null;
+  }
 
-  const closes = candles.map(c => c.close);
-  const price = closes[closes.length - 1];
+  const closes =
+    candles.map(
+      c => c.close
+    );
 
-  const e20 = ema(closes, 20);
-  const e50 = ema(closes, 50);
-  const r = rsi(closes, 14);
-  const m = macd(closes);
-  const a = atr(candles, 14);
+  const price =
+    closes[closes.length - 1];
+
+  const ema20 =
+    ema(closes, 20);
+
+  const ema50 =
+    ema(closes, 50);
+
+  const rsi14 =
+    rsi(closes, 14);
+
+  const macdData =
+    macd(closes);
+
+  const atr14 =
+    atr(candles, 14);
 
   if (
-    e20 === null ||
-    e50 === null ||
-    r === null ||
-    m === null ||
-    a === null
+    ema20 === null ||
+    ema50 === null ||
+    rsi14 === null ||
+    macdData === null ||
+    atr14 === null
   ) {
     return null;
   }
@@ -148,74 +231,140 @@ function analyze(candles) {
   let buyScore = 0;
   let sellScore = 0;
 
-  if (price > e20) buyScore++;
-  if (price < e20) sellScore++;
+  // Trend
+  if (price > ema20) {
+    buyScore++;
+  }
 
-  if (e20 > e50) buyScore++;
-  if (e20 < e50) sellScore++;
+  if (price < ema20) {
+    sellScore++;
+  }
 
-  if (r > 50 && r < 70) buyScore++;
-  if (r < 50 && r > 30) sellScore++;
+  // EMA trend
+  if (ema20 > ema50) {
+    buyScore++;
+  }
 
-  if (m.histogram > 0) buyScore++;
-  if (m.histogram < 0) sellScore++;
+  if (ema20 < ema50) {
+    sellScore++;
+  }
+
+  // RSI
+  if (
+    rsi14 >= 50 &&
+    rsi14 < 70
+  ) {
+    buyScore++;
+  }
+
+  if (
+    rsi14 <= 50 &&
+    rsi14 > 30
+  ) {
+    sellScore++;
+  }
+
+  // MACD
+  if (
+    macdData.histogram > 0
+  ) {
+    buyScore++;
+  }
+
+  if (
+    macdData.histogram < 0
+  ) {
+    sellScore++;
+  }
 
   let signal = "HOLD";
 
-  if (buyScore >= 3 && buyScore > sellScore) {
+  if (
+    buyScore >= 3 &&
+    buyScore > sellScore &&
+    rsi14 < 70
+  ) {
     signal = "BUY";
   }
 
-  if (sellScore >= 3 && sellScore > buyScore) {
+  if (
+    sellScore >= 3 &&
+    sellScore > buyScore &&
+    rsi14 > 30
+  ) {
     signal = "SELL";
   }
 
-  const score = Math.max(
-    buyScore,
-    sellScore
-  );
+  const score =
+    Math.max(
+      buyScore,
+      sellScore
+    );
 
   const confidence =
-    Math.round((score / 4) * 100);
+    Math.round(
+      (score / 4) * 100
+    );
 
   let stopLoss = null;
-  let takeProfit1 = null;
-  let takeProfit2 = null;
+  let takeProfit = null;
 
   if (signal === "BUY") {
-    stopLoss = price - a * 1.5;
+    stopLoss =
+      price -
+      atr14 * 1.5;
 
-    const risk = price - stopLoss;
+    const risk =
+      price - stopLoss;
 
-    takeProfit1 = price + risk * 2;
-    takeProfit2 = price + risk * 2.5;
+    takeProfit =
+      price +
+      risk *
+        CONFIG.riskReward;
   }
 
   if (signal === "SELL") {
-    stopLoss = price + a * 1.5;
+    stopLoss =
+      price +
+      atr14 * 1.5;
 
-    const risk = stopLoss - price;
+    const risk =
+      stopLoss - price;
 
-    takeProfit1 = price - risk * 2;
-    takeProfit2 = price - risk * 2.5;
+    takeProfit =
+      price -
+      risk *
+        CONFIG.riskReward;
   }
 
   return {
     price,
-    ema20: e20,
-    ema50: e50,
-    rsi14: r,
-    macd: m.line,
-    macdSignal: m.signal,
-    macdHistogram: m.histogram,
-    atr14: a,
+
+    ema20,
+    ema50,
+
+    rsi14,
+
+    macd:
+      macdData.line,
+
+    macdSignal:
+      macdData.signal,
+
+    macdHistogram:
+      macdData.histogram,
+
+    atr14,
+
     signal,
+
     confidence,
+
     buyScore,
     sellScore,
+
     stopLoss,
-    takeProfit1,
-    takeProfit2
+    takeProfit
   };
 }
 
@@ -225,17 +374,20 @@ async function getCandles(
   limit = 200
 ) {
   const url =
-    `https://api.kraken.com/0/public/OHLC` +
+    "https://api.kraken.com/0/public/OHLC" +
     `?pair=${encodeURIComponent(pair)}` +
     `&interval=${interval}`;
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json"
-    }
-  });
+  const response =
+    await fetch(url, {
+      headers: {
+        Accept:
+          "application/json"
+      }
+    });
 
-  const text = await response.text();
+  const text =
+    await response.text();
 
   if (!response.ok) {
     throw new Error(
@@ -243,126 +395,244 @@ async function getCandles(
     );
   }
 
-  const data = JSON.parse(text);
+  const data =
+    JSON.parse(text);
 
-  if (data.error && data.error.length) {
+  if (
+    data.error &&
+    data.error.length
+  ) {
     throw new Error(
       data.error.join(", ")
     );
   }
 
-  const result = data.result || {};
+  const result =
+    data.result || {};
 
-  const key = Object.keys(result).find(
-    k => k !== "last"
-  );
+  const key =
+    Object.keys(result)
+      .find(
+        k => k !== "last"
+      );
 
   if (!key) {
     throw new Error(
-      "No Kraken candle data"
+      "Kraken returned no candles"
     );
   }
 
   return result[key]
     .slice(-limit)
     .map(c => ({
-      time: Number(c[0]),
-      open: Number(c[1]),
-      high: Number(c[2]),
-      low: Number(c[3]),
-      close: Number(c[4]),
-      vwap: Number(c[5]),
-      volume: Number(c[6]),
-      trades: Number(c[7])
+      time:
+        Number(c[0]),
+
+      open:
+        Number(c[1]),
+
+      high:
+        Number(c[2]),
+
+      low:
+        Number(c[3]),
+
+      close:
+        Number(c[4]),
+
+      vwap:
+        Number(c[5]),
+
+      volume:
+        Number(c[6]),
+
+      trades:
+        Number(c[7])
     }));
 }
 
-function calculateTradeResult(
+function evaluateTrade(
   setup,
   candles,
   entryIndex
 ) {
-  const entry = setup.price;
+  const firstIndex =
+    entryIndex + 1;
+
+  const lastIndex =
+    Math.min(
+      candles.length - 1,
+
+      entryIndex +
+        CONFIG.maxHoldingCandles
+    );
 
   for (
-    let i = entryIndex + 1;
-    i < candles.length;
+    let i = firstIndex;
+    i <= lastIndex;
     i++
   ) {
-    const candle = candles[i];
+    const candle =
+      candles[i];
 
-    if (setup.signal === "BUY") {
+    if (
+      setup.signal === "BUY"
+    ) {
       const stopHit =
-        candle.low <= setup.stopLoss;
+        candle.low <=
+        setup.stopLoss;
 
       const targetHit =
-        candle.high >= setup.takeProfit1;
+        candle.high >=
+        setup.takeProfit;
 
-      if (stopHit && targetHit) {
+      /*
+        إذا لمس السعر SL وTP
+        في نفس الشمعة،
+        نأخذ السيناريو المحافظ:
+        LOSS.
+      */
+
+      if (
+        stopHit &&
+        targetHit
+      ) {
         return {
           outcome: "LOSS",
-          grossReturn: -1,
-          exitIndex: i
+          exitPrice:
+            setup.stopLoss,
+          exitIndex: i,
+          reason:
+            "STOP_AND_TARGET_SAME_CANDLE"
         };
       }
 
       if (stopHit) {
         return {
           outcome: "LOSS",
-          grossReturn: -1,
-          exitIndex: i
+          exitPrice:
+            setup.stopLoss,
+          exitIndex: i,
+          reason:
+            "STOP_LOSS"
         };
       }
 
       if (targetHit) {
         return {
           outcome: "WIN",
-          grossReturn: 2,
-          exitIndex: i
+          exitPrice:
+            setup.takeProfit,
+          exitIndex: i,
+          reason:
+            "TAKE_PROFIT"
         };
       }
     }
 
-    if (setup.signal === "SELL") {
+    if (
+      setup.signal === "SELL"
+    ) {
       const stopHit =
-        candle.high >= setup.stopLoss;
+        candle.high >=
+        setup.stopLoss;
 
       const targetHit =
-        candle.low <= setup.takeProfit1;
+        candle.low <=
+        setup.takeProfit;
 
-      if (stopHit && targetHit) {
+      if (
+        stopHit &&
+        targetHit
+      ) {
         return {
           outcome: "LOSS",
-          grossReturn: -1,
-          exitIndex: i
+          exitPrice:
+            setup.stopLoss,
+          exitIndex: i,
+          reason:
+            "STOP_AND_TARGET_SAME_CANDLE"
         };
       }
 
       if (stopHit) {
         return {
           outcome: "LOSS",
-          grossReturn: -1,
-          exitIndex: i
+          exitPrice:
+            setup.stopLoss,
+          exitIndex: i,
+          reason:
+            "STOP_LOSS"
         };
       }
 
       if (targetHit) {
         return {
           outcome: "WIN",
-          grossReturn: 2,
-          exitIndex: i
+          exitPrice:
+            setup.takeProfit,
+          exitIndex: i,
+          reason:
+            "TAKE_PROFIT"
         };
       }
     }
   }
 
-  return null;
+  /*
+    لا SL ولا TP خلال فترة الاحتفاظ.
+    نغلق على Close آخر شمعة.
+  */
+
+  const exitIndex =
+    lastIndex;
+
+  const exitPrice =
+    candles[exitIndex].close;
+
+  let grossReturn = 0;
+
+  if (
+    setup.signal === "BUY"
+  ) {
+    grossReturn =
+      ((exitPrice -
+        setup.price) /
+        setup.price) *
+      100;
+  }
+
+  if (
+    setup.signal === "SELL"
+  ) {
+    grossReturn =
+      ((setup.price -
+        exitPrice) /
+        setup.price) *
+      100;
+  }
+
+  return {
+    outcome:
+      grossReturn > 0
+        ? "WIN"
+        : "LOSS",
+
+    exitPrice,
+
+    exitIndex,
+
+    reason:
+      "TIME_EXIT",
+
+    grossReturn
+  };
 }
 
-async function backtest(
+async function runBacktest(
   pair,
   interval,
-  limit = 200
+  limit
 ) {
   const candles =
     await getCandles(
@@ -372,7 +642,7 @@ async function backtest(
     );
 
   let equity = 100;
-  let peak = 100;
+  let peakEquity = 100;
   let maxDrawdown = 0;
 
   let wins = 0;
@@ -383,24 +653,32 @@ async function backtest(
 
   const trades = [];
 
-  let nextAvailableIndex = 60;
+  let nextAvailable =
+    60;
 
   for (
     let i = 60;
     i < candles.length - 1;
     i++
   ) {
-    if (i < nextAvailableIndex) {
+    if (
+      i < nextAvailable
+    ) {
       continue;
     }
 
     const history =
-      candles.slice(0, i + 1);
+      candles.slice(
+        0,
+        i + 1
+      );
 
     const setup =
       analyze(history);
 
-    if (!setup) continue;
+    if (!setup) {
+      continue;
+    }
 
     if (
       setup.signal !== "BUY" &&
@@ -417,39 +695,77 @@ async function backtest(
     }
 
     const result =
-      calculateTradeResult(
+      evaluateTrade(
         setup,
         candles,
         i
       );
 
-    if (!result) continue;
+    if (!result) {
+      continue;
+    }
 
-    const costs =
-      (CONFIG.feePercent * 2) +
-      (CONFIG.slippagePercent * 2);
+    let grossReturn;
+
+    if (
+      result.reason ===
+      "STOP_LOSS"
+    ) {
+      grossReturn = -1;
+    } else if (
+      result.reason ===
+      "TAKE_PROFIT"
+    ) {
+      grossReturn =
+        CONFIG.riskReward;
+    } else if (
+      result.reason ===
+      "STOP_AND_TARGET_SAME_CANDLE"
+    ) {
+      grossReturn = -1;
+    } else {
+      grossReturn =
+        result.grossReturn;
+    }
+
+    const fees =
+      CONFIG.feePercent * 2;
+
+    const slippage =
+      CONFIG.slippagePercent * 2;
 
     const netReturn =
-      result.grossReturn - costs;
+      grossReturn -
+      fees -
+      slippage;
 
-    if (result.outcome === "WIN") {
+    if (
+      netReturn > 0
+    ) {
       wins++;
-      grossProfit += netReturn;
+      grossProfit +=
+        netReturn;
     } else {
       losses++;
-      grossLoss += Math.abs(netReturn);
+      grossLoss +=
+        Math.abs(netReturn);
     }
 
     equity =
       equity *
       (1 + netReturn / 100);
 
-    peak =
-      Math.max(peak, equity);
+    peakEquity =
+      Math.max(
+        peakEquity,
+        equity
+      );
 
     const drawdown =
-      ((peak - equity) /
-        peak) * 100;
+      ((peakEquity -
+        equity) /
+        peakEquity) *
+      100;
 
     maxDrawdown =
       Math.max(
@@ -458,33 +774,54 @@ async function backtest(
       );
 
     trades.push({
-      time:
+      entryTime:
+        new Date(
+          candles[i].time *
+            1000
+        ).toISOString(),
+
+      exitTime:
         new Date(
           candles[
             result.exitIndex
-          ].time * 1000
+          ].time *
+            1000
         ).toISOString(),
 
-      signal: setup.signal,
+      signal:
+        setup.signal,
 
-      entry: round(
-        entryPrice(setup)
-      ),
+      entry:
+        round(
+          setup.price
+        ),
 
-      stopLoss: round(
-        setup.stopLoss
-      ),
+      exit:
+        round(
+          result.exitPrice
+        ),
 
-      takeProfit: round(
-        setup.takeProfit1
-      ),
+      stopLoss:
+        round(
+          setup.stopLoss
+        ),
+
+      takeProfit:
+        round(
+          setup.takeProfit
+        ),
 
       outcome:
-        result.outcome,
+        netReturn > 0
+          ? "WIN"
+          : "LOSS",
+
+      reason:
+        result.reason,
 
       grossReturn:
         round(
-          result.grossReturn,
+          grossReturn,
           3
         ),
 
@@ -496,10 +833,11 @@ async function backtest(
     });
 
     /*
-      لا نفتح صفقة جديدة
-      حتى تنتهي الصفقة الحالية.
+      الصفقة لازم تكمل
+      قبل فتح صفقة جديدة.
     */
-    nextAvailableIndex =
+
+    nextAvailable =
       result.exitIndex + 1;
   }
 
@@ -507,13 +845,16 @@ async function backtest(
     wins + losses;
 
   const winRate =
-    totalTrades
-      ? (wins / totalTrades) * 100
+    totalTrades > 0
+      ? (wins /
+          totalTrades) *
+        100
       : 0;
 
   const profitFactor =
     grossLoss > 0
-      ? grossProfit / grossLoss
+      ? grossProfit /
+        grossLoss
       : null;
 
   return {
@@ -547,7 +888,10 @@ async function backtest(
         CONFIG.minConfidence,
 
       riskReward:
-        "1:2"
+        `1:${CONFIG.riskReward}`,
+
+      maxHoldingCandles:
+        CONFIG.maxHoldingCandles
     },
 
     backtest: {
@@ -562,7 +906,9 @@ async function backtest(
       losses,
 
       winRate:
-        round(winRate),
+        round(
+          winRate
+        ),
 
       profitFactor:
         round(
@@ -603,15 +949,15 @@ async function backtest(
   };
 }
 
-function entryPrice(setup) {
-  return setup.price;
-}
-
-function json(data, status = 200) {
+function json(
+  data,
+  status = 200
+) {
   return new Response(
     JSON.stringify(data),
     {
       status,
+
       headers: {
         "Content-Type":
           "application/json; charset=utf-8",
@@ -627,6 +973,10 @@ export default {
   async fetch(request) {
     const url =
       new URL(request.url);
+
+    /*
+      HOME
+    */
 
     if (
       url.pathname === "/"
@@ -651,6 +1001,10 @@ export default {
           "AI Trader Pro API is running"
       });
     }
+
+    /*
+      STATUS
+    */
 
     if (
       url.pathname ===
@@ -680,11 +1034,11 @@ export default {
         strategy:
           "3-condition confirmation",
 
+        backtest:
+          "multi-candle",
+
         riskReward:
           "1:2",
-
-        backtesting:
-          true,
 
         realTrading:
           false,
@@ -693,6 +1047,10 @@ export default {
           new Date().toISOString()
       });
     }
+
+    /*
+      ANALYSIS
+    */
 
     if (
       url.pathname ===
@@ -743,25 +1101,29 @@ export default {
 
         if (!result) {
           throw new Error(
-            "Not enough data"
+            "Not enough market data"
           );
         }
 
-        let risk = "LOW";
+        let risk =
+          "LOW";
 
         if (
           result.rsi14 >= 70 ||
           result.rsi14 <= 30
         ) {
-          risk = "HIGH";
+          risk =
+            "HIGH";
         } else if (
-          result.confidence < 80
+          result.confidence < 85
         ) {
-          risk = "MEDIUM";
+          risk =
+            "MEDIUM";
         }
 
         return json({
-          success: true,
+          success:
+            true,
 
           project:
             "AI Trader Pro",
@@ -854,18 +1216,13 @@ export default {
                 result.stopLoss
               ),
 
-            takeProfit1:
+            takeProfit:
               round(
-                result.takeProfit1
-              ),
-
-            takeProfit2:
-              round(
-                result.takeProfit2
+                result.takeProfit
               ),
 
             riskReward:
-              "1:2 / 1:2.5"
+              "1:2"
           },
 
           timestamp:
@@ -885,6 +1242,10 @@ export default {
         );
       }
     }
+
+    /*
+      BACKTEST
+    */
 
     if (
       url.pathname ===
@@ -913,8 +1274,10 @@ export default {
                 "limit"
               )
             ) || 200,
+
             100
           ),
+
           200
         );
 
@@ -937,7 +1300,7 @@ export default {
 
       try {
         return json(
-          await backtest(
+          await runBacktest(
             pair,
             interval,
             limit
@@ -958,6 +1321,10 @@ export default {
       }
     }
 
+    /*
+      UNKNOWN ROUTE
+    */
+
     return json(
       {
         error:
@@ -972,6 +1339,7 @@ export default {
           "/api/backtest?pair=XBTUSD&interval=240&limit=200"
         ]
       },
+
       404
     );
   }
