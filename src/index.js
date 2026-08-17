@@ -2,20 +2,15 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    const COINS = {
-      BTCUSDT: 1,
-      ETHUSDT: 1027
-    };
-
     // =========================
-    // HOME
+    // BASIC INFO
     // =========================
     if (url.pathname === "/") {
       return Response.json({
         name: "AI Trader Pro",
         version: "V2.2",
         status: "online",
-        mode: "market-data"
+        mode: "real-market-data"
       });
     }
 
@@ -27,23 +22,29 @@ export default {
         status: "online",
         project: "AI Trader Pro",
         version: "V2.2",
-        market_data: "CoinMarketCap"
+        market_data: "CoinMarketCap",
+        analysis: "Candles + Technical Indicators"
       });
     }
 
     // =========================
-    // PRICE
+    // CURRENT PRICE
     // =========================
     if (url.pathname === "/api/price") {
       const symbol = (
         url.searchParams.get("symbol") || "BTCUSDT"
       ).toUpperCase();
 
-      if (!COINS[symbol]) {
+      const ids = {
+        BTCUSDT: 1,
+        ETHUSDT: 1027
+      };
+
+      if (!ids[symbol]) {
         return Response.json(
           {
             error: "Unsupported symbol",
-            supported_symbols: Object.keys(COINS)
+            supported: ["BTCUSDT", "ETHUSDT"]
           },
           { status: 400 }
         );
@@ -51,7 +52,7 @@ export default {
 
       try {
         const response = await fetch(
-          `https://pro-api.coinmarketcap.com/public-api/v1/simple/price?ids=${COINS[symbol]}&convert=USD`
+          `https://pro-api.coinmarketcap.com/public-api/v1/simple/price?ids=${ids[symbol]}&convert=USD`
         );
 
         const body = await response.text();
@@ -72,9 +73,7 @@ export default {
 
         if (!coin) {
           return Response.json(
-            {
-              error: "No market data returned"
-            },
+            { error: "No market data returned" },
             { status: 502 }
           );
         }
@@ -85,53 +84,6 @@ export default {
           price: Number(coin.price),
           currency: "USD",
           source: "CoinMarketCap",
-          timestamp: result?.status?.timestamp || new Date().toISOString()
-        });
-
-      } catch (error) {
-        return Response.json(
-          {
-            error: "Market data connection failed",
-            details: String(error)
-          },
-          { status: 500 }
-        );
-      }
-    }
-
-    // =========================
-    // MULTI MARKET
-    // =========================
-    if (url.pathname === "/api/markets") {
-      try {
-        const response = await fetch(
-          "https://pro-api.coinmarketcap.com/public-api/v1/simple/price?ids=1,1027&convert=USD"
-        );
-
-        const body = await response.text();
-
-        if (!response.ok) {
-          return Response.json(
-            {
-              error: "Market API error",
-              upstream_status: response.status,
-              details: body.slice(0, 500)
-            },
-            { status: 502 }
-          );
-        }
-
-        const result = JSON.parse(body);
-        const data = result?.data || [];
-
-        return Response.json({
-          success: true,
-          source: "CoinMarketCap",
-          markets: data.map((coin) => ({
-            id: coin.id,
-            price: Number(coin.price),
-            currency: "USD"
-          })),
           timestamp:
             result?.status?.timestamp ||
             new Date().toISOString()
@@ -140,7 +92,98 @@ export default {
       } catch (error) {
         return Response.json(
           {
-            error: "Market data connection failed",
+            error: "Market connection failed",
+            details: String(error)
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // =========================
+    // REAL CANDLE TEST
+    // =========================
+    if (url.pathname === "/api/candles") {
+      const symbol = (
+        url.searchParams.get("symbol") || "BTCUSDT"
+      ).toUpperCase();
+
+      const interval =
+        url.searchParams.get("interval") || "1h";
+
+      const limit = Math.min(
+        Number(url.searchParams.get("limit")) || 100,
+        100
+      );
+
+      const allowedIntervals = [
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "4h",
+        "1d"
+      ];
+
+      if (!allowedIntervals.includes(interval)) {
+        return Response.json(
+          {
+            error: "Invalid interval",
+            allowed: allowedIntervals
+          },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const endpoint =
+          `https://data-api.binance.vision/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit}`;
+
+        const response = await fetch(endpoint, {
+          headers: {
+            "Accept": "application/json"
+          }
+        });
+
+        const body = await response.text();
+
+        if (!response.ok) {
+          return Response.json(
+            {
+              error: "Candle API error",
+              provider: "Binance Market Data",
+              upstream_status: response.status,
+              details: body.slice(0, 500)
+            },
+            { status: 502 }
+          );
+        }
+
+        const raw = JSON.parse(body);
+
+        const candles = raw.map((candle) => ({
+          time: candle[0],
+          open: Number(candle[1]),
+          high: Number(candle[2]),
+          low: Number(candle[3]),
+          close: Number(candle[4]),
+          volume: Number(candle[5])
+        }));
+
+        return Response.json({
+          success: true,
+          symbol,
+          interval,
+          count: candles.length,
+          source: "Binance Market Data",
+          candles
+        });
+
+      } catch (error) {
+        return Response.json(
+          {
+            error: "Unable to fetch candles",
             details: String(error)
           },
           { status: 500 }
@@ -158,8 +201,7 @@ export default {
           "/",
           "/api/status",
           "/api/price?symbol=BTCUSDT",
-          "/api/price?symbol=ETHUSDT",
-          "/api/markets"
+          "/api/candles?symbol=BTCUSDT&interval=1h&limit=100"
         ]
       },
       { status: 404 }
