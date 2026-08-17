@@ -2,17 +2,14 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // الصفحة الرئيسية
     if (url.pathname === "/") {
       return Response.json({
         name: "AI Trader Pro",
         version: "V2.2",
-        status: "online",
-        message: "AI Trader Pro API is running"
+        status: "online"
       });
     }
 
-    // حالة النظام
     if (url.pathname === "/api/status") {
       return Response.json({
         status: "online",
@@ -21,36 +18,17 @@ export default {
       });
     }
 
-    // جلب سعر BTC / ETH
     if (url.pathname === "/api/price") {
       const symbol = (
         url.searchParams.get("symbol") || "BTCUSDT"
       ).toUpperCase();
 
-      const assets = {
-        BTCUSDT: "bitcoin",
-        ETHUSDT: "ethereum"
-      };
-
-      const asset = assets[symbol];
-
-      if (!asset) {
-        return Response.json(
-          {
-            error: "Unsupported symbol",
-            supported: ["BTCUSDT", "ETHUSDT"]
-          },
-          { status: 400 }
-        );
-      }
-
       try {
         const response = await fetch(
-          `https://api.coincap.io/v2/assets/${asset}`,
+          `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`,
           {
             headers: {
-              "Accept": "application/json",
-              "User-Agent": "AI-Trader-Pro/2.2"
+              "Accept": "application/json"
             }
           }
         );
@@ -60,7 +38,7 @@ export default {
         if (!response.ok) {
           return Response.json(
             {
-              error: "Market API error",
+              error: "Binance API error",
               upstream_status: response.status,
               details: body.slice(0, 500)
             },
@@ -68,44 +46,31 @@ export default {
           );
         }
 
-        let result;
+        let data;
 
         try {
-          result = JSON.parse(body);
+          data = JSON.parse(body);
         } catch {
           return Response.json(
             {
-              error: "Invalid market API response",
+              error: "Invalid Binance response",
               details: body.slice(0, 500)
             },
             { status: 502 }
           );
         }
 
-        const price = Number(result?.data?.priceUsd);
-
-        if (!Number.isFinite(price)) {
-          return Response.json(
-            {
-              error: "Price unavailable",
-              details: result
-            },
-            { status: 502 }
-          );
-        }
-
         return Response.json({
-          symbol,
-          price,
-          currency: "USD",
-          source: "CoinCap",
+          symbol: data.symbol,
+          price: Number(data.price),
+          source: "Binance",
           timestamp: Date.now()
         });
 
       } catch (error) {
         return Response.json(
           {
-            error: "Unable to connect to market API",
+            error: "Unable to connect to Binance",
             details: String(error)
           },
           { status: 500 }
@@ -113,15 +78,13 @@ export default {
       }
     }
 
-    // أي رابط غير معروف
     return Response.json(
       {
         error: "Not Found",
         available_endpoints: [
           "/",
           "/api/status",
-          "/api/price?symbol=BTCUSDT",
-          "/api/price?symbol=ETHUSDT"
+          "/api/price?symbol=BTCUSDT"
         ]
       },
       { status: 404 }
