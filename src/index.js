@@ -2,49 +2,37 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // =========================
-    // HOME
-    // =========================
     if (url.pathname === "/") {
       return Response.json({
         name: "AI Trader Pro",
         version: "V2.2",
-        status: "online",
-        message: "AI Trader Pro API is running"
+        status: "online"
       });
     }
 
-    // =========================
-    // STATUS
-    // =========================
     if (url.pathname === "/api/status") {
       return Response.json({
         status: "online",
         project: "AI Trader Pro",
-        version: "V2.2",
-        market_data: "Binance Market Data API"
+        version: "V2.2"
       });
     }
 
-    // =========================
-    // MARKET PRICE
-    // =========================
     if (url.pathname === "/api/price") {
       const symbol = (
         url.searchParams.get("symbol") || "BTCUSDT"
       ).toUpperCase();
 
-      // نخليو العملات المسموحة حالياً
-      const supportedSymbols = [
-        "BTCUSDT",
-        "ETHUSDT"
-      ];
+      const ids = {
+        BTCUSDT: "1",
+        ETHUSDT: "1027"
+      };
 
-      if (!supportedSymbols.includes(symbol)) {
+      if (!ids[symbol]) {
         return Response.json(
           {
             error: "Unsupported symbol",
-            supported_symbols: supportedSymbols
+            supported: ["BTCUSDT", "ETHUSDT"]
           },
           { status: 400 }
         );
@@ -52,69 +40,21 @@ export default {
 
       try {
         const apiUrl =
-          `https://data-api.binance.vision/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`;
+          `https://pro-api.coinmarketcap.com/public-api/v1/simple/price?ids=${ids[symbol]}&convert=USD`;
 
-        const response = await fetch(apiUrl, {
-          method: "GET",
-          headers: {
-            "Accept": "application/json"
-          }
-        });
-
+        const response = await fetch(apiUrl);
         const body = await response.text();
 
-        // API رفض الطلب
-        if (!response.ok) {
-          return Response.json(
-            {
-              error: "Market API error",
-              provider: "Binance Market Data",
-              upstream_status: response.status,
-              details: body.slice(0, 500)
-            },
-            { status: 502 }
-          );
-        }
-
-        let data;
-
-        try {
-          data = JSON.parse(body);
-        } catch {
-          return Response.json(
-            {
-              error: "Invalid market API response",
-              details: body.slice(0, 500)
-            },
-            { status: 502 }
-          );
-        }
-
-        const price = Number(data.price);
-
-        if (!Number.isFinite(price)) {
-          return Response.json(
-            {
-              error: "Invalid price received",
-              data
-            },
-            { status: 502 }
-          );
-        }
-
         return Response.json({
-          success: true,
-          symbol: data.symbol,
-          price: price,
-          currency: "USDT",
-          source: "Binance Market Data",
-          timestamp: Date.now()
+          worker: "online",
+          upstream_status: response.status,
+          upstream_response: body.slice(0, 1000)
         });
 
       } catch (error) {
         return Response.json(
           {
-            error: "Unable to connect to market API",
+            error: "Connection failed",
             details: String(error)
           },
           { status: 500 }
@@ -122,18 +62,9 @@ export default {
       }
     }
 
-    // =========================
-    // 404
-    // =========================
     return Response.json(
       {
-        error: "Not Found",
-        available_endpoints: [
-          "/",
-          "/api/status",
-          "/api/price?symbol=BTCUSDT",
-          "/api/price?symbol=ETHUSDT"
-        ]
+        error: "Not Found"
       },
       { status: 404 }
     );
