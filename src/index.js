@@ -1,57 +1,103 @@
+/*
+========================================================
+ AI TRADER PRO
+ Full Organized Worker
+ Market: Kraken
+ Trading: DISABLED
+========================================================
+*/
+
 const CONFIG = {
-  version: "V3.1",
+  version: "V4.0",
+
+  accountBalance: 100,
+
+  riskPerTradePercent: 1,
 
   feePercent: 0.1,
   slippagePercent: 0.05,
 
-  accountBalance: 100,
-  riskPerTradePercent: 1,
-
-  minConfidence: 75,
-
   riskReward: 2,
 
+  minimumConfidence: 75,
+
   maxHoldingCandles: 12,
+
   cooldownCandles: 2,
 
   maxCandles: 720,
 
-  realTrading: false
+  minimumCandles: 100
 };
 
 const ALLOWED_INTERVALS = [60, 240];
 
-const SUPPORTED_PAIRS = [
-  "XBTUSD",
-  "BTCUSD",
-  "ETHUSD"
-];
 
 /*
-  ----------------------------------------------------
-  HELPERS
-  ----------------------------------------------------
+========================================================
+ SYMBOLS
+========================================================
 */
 
-function round(value, decimals = 2) {
-  if (!Number.isFinite(value)) return null;
+const SYMBOLS = {
+  XBTUSD: {
+    base: ["XBT", "BTC"],
+    quote: ["USD"]
+  },
+
+  BTCUSD: {
+    base: ["XBT", "BTC"],
+    quote: ["USD"]
+  },
+
+  ETHUSD: {
+    base: ["ETH"],
+    quote: ["USD"]
+  }
+};
+
+
+/*
+========================================================
+ HELPERS
+========================================================
+*/
+
+function round(value, decimals = 4) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
   return Number(value.toFixed(decimals));
 }
 
-function normalizeSymbol(value) {
+
+function normalize(value) {
   return String(value || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
 }
 
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
+
+function json(data, status = 200) {
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "*"
+      }
+    }
+  );
 }
 
+
 /*
-  ----------------------------------------------------
-  EMA
-  ----------------------------------------------------
+========================================================
+ EMA
+========================================================
 */
 
 function ema(values, period) {
@@ -68,20 +114,21 @@ function ema(values, period) {
 
   for (let i = period; i < values.length; i++) {
     result =
-      (values[i] - result) * multiplier + result;
+      ((values[i] - result) * multiplier) + result;
   }
 
   return result;
 }
 
+
 /*
-  ----------------------------------------------------
-  RSI
-  ----------------------------------------------------
+========================================================
+ RSI
+========================================================
 */
 
 function rsi(values, period = 14) {
-  if (!Array.isArray(values) || values.length <= period) {
+  if (values.length <= period) {
     return null;
   }
 
@@ -134,17 +181,18 @@ function rsi(values, period = 14) {
   const rs =
     avgGain / avgLoss;
 
-  return 100 - 100 / (1 + rs);
+  return 100 - (100 / (1 + rs));
 }
 
+
 /*
-  ----------------------------------------------------
-  MACD
-  ----------------------------------------------------
+========================================================
+ MACD
+========================================================
 */
 
 function macd(values) {
-  if (!Array.isArray(values) || values.length < 50) {
+  if (values.length < 50) {
     return null;
   }
 
@@ -179,9 +227,7 @@ function macd(values) {
   }
 
   const line =
-    macdLines[
-      macdLines.length - 1
-    ];
+    macdLines[macdLines.length - 1];
 
   const signal =
     ema(macdLines, 9);
@@ -198,17 +244,15 @@ function macd(values) {
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  ATR
-  ----------------------------------------------------
+========================================================
+ ATR
+========================================================
 */
 
 function atr(candles, period = 14) {
-  if (
-    !Array.isArray(candles) ||
-    candles.length <= period
-  ) {
+  if (candles.length <= period) {
     return null;
   }
 
@@ -225,10 +269,9 @@ function atr(candles, period = 14) {
     const previous =
       candles[i - 1];
 
-    ranges.push(
+    const trueRange =
       Math.max(
-        current.high -
-          current.low,
+        current.high - current.low,
 
         Math.abs(
           current.high -
@@ -239,158 +282,86 @@ function atr(candles, period = 14) {
           current.low -
           previous.close
         )
-      )
-    );
+      );
+
+    ranges.push(trueRange);
   }
 
-  let value =
+  if (ranges.length < period) {
+    return null;
+  }
+
+  let result =
     ranges
       .slice(0, period)
-      .reduce(
-        (a, b) => a + b,
-        0
-      ) / period;
+      .reduce((a, b) => a + b, 0) /
+    period;
 
   for (
     let i = period;
     i < ranges.length;
     i++
   ) {
-    value =
+    result =
       (
-        value * (period - 1) +
+        (result * (period - 1)) +
         ranges[i]
       ) / period;
   }
 
-  return value;
+  return result;
 }
 
+
 /*
-  ----------------------------------------------------
-  AVERAGE VOLUME
-  ----------------------------------------------------
+========================================================
+ VOLUME FILTER
+========================================================
 */
 
-function averageVolume(
-  candles,
-  period = 20
-) {
-  if (
-    candles.length < period
-  ) {
+function volumeRatio(candles, period = 20) {
+  if (candles.length <= period) {
     return null;
   }
 
   const recent =
-    candles.slice(-period);
+    candles[candles.length - 1].volume;
 
-  return (
-    recent.reduce(
-      (sum, candle) =>
-        sum + candle.volume,
+  const previous =
+    candles
+      .slice(-period - 1, -1)
+      .map(c => c.volume);
+
+  const average =
+    previous.reduce(
+      (a, b) => a + b,
       0
-    ) / period
-  );
+    ) / previous.length;
+
+  if (!average) {
+    return null;
+  }
+
+  return recent / average;
 }
+
 
 /*
-  ----------------------------------------------------
-  KRAKEN PAIR RESOLUTION
-  ----------------------------------------------------
+========================================================
+ KRAKEN PAIR RESOLUTION
+========================================================
 */
 
-function pairMatches(
-  info,
-  requested
-) {
-  const req =
-    normalizeSymbol(requested);
-
-  const base =
-    normalizeSymbol(
-      info.base ||
-      info.base_altname ||
-      info.base_asset ||
-      ""
-    );
-
-  const quote =
-    normalizeSymbol(
-      info.quote ||
-      info.quote_altname ||
-      info.quote_asset ||
-      ""
-    );
-
-  const altname =
-    normalizeSymbol(
-      info.altname || ""
-    );
-
-  const wsname =
-    normalizeSymbol(
-      info.wsname || ""
-    );
-
-  const pairName =
-    normalizeSymbol(
-      info.pair || ""
-    );
-
-  const possible = [
-    altname,
-    wsname,
-    pairName,
-    base + quote
-  ];
-
-  if (
-    possible.includes(req)
-  ) {
-    return true;
-  }
-
-  if (
-    (
-      req === "BTCUSD" ||
-      req === "XBTUSD"
-    ) &&
-    quote === "USD" &&
-    (
-      base === "BTC" ||
-      base === "XBT"
-    )
-  ) {
-    return true;
-  }
-
-  if (
-    req === "ETHUSD" &&
-    quote === "USD" &&
-    base === "ETH"
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-async function resolveKrakenPair(
-  requestedPair
-) {
+async function resolveKrakenPair(requestedPair) {
   const requested =
-    String(
-      requestedPair || "XBTUSD"
-    ).toUpperCase();
+    normalize(requestedPair || "XBTUSD");
 
   const response =
     await fetch(
       "https://api.kraken.com/0/public/AssetPairs",
       {
         headers: {
-          Accept:
-            "application/json"
+          Accept: "application/json"
         }
       }
     );
@@ -407,11 +378,10 @@ async function resolveKrakenPair(
   let data;
 
   try {
-    data =
-      JSON.parse(text);
+    data = JSON.parse(text);
   } catch {
     throw new Error(
-      "Kraken AssetPairs returned invalid JSON"
+      "Kraken AssetPairs invalid JSON"
     );
   }
 
@@ -427,22 +397,27 @@ async function resolveKrakenPair(
   const result =
     data.result || {};
 
+  const definition =
+    SYMBOLS[requested];
+
   /*
-    Exact / semantic matching
+    First: exact Kraken names.
   */
 
   for (
     const [key, info]
     of Object.entries(result)
   ) {
+    const names = [
+      key,
+      info.altname,
+      info.wsname
+    ]
+      .filter(Boolean)
+      .map(normalize);
+
     if (
-      pairMatches(
-        {
-          ...info,
-          pair: key
-        },
-        requested
-      )
+      names.includes(requested)
     ) {
       return {
         requested,
@@ -452,15 +427,62 @@ async function resolveKrakenPair(
     }
   }
 
+  /*
+    Second: semantic matching.
+  */
+
+  if (definition) {
+    for (
+      const [key, info]
+      of Object.entries(result)
+    ) {
+      const base =
+        normalize(
+          info.base ||
+          info.base_altname ||
+          ""
+        );
+
+      const quote =
+        normalize(
+          info.quote ||
+          info.quote_altname ||
+          ""
+        );
+
+      const baseOK =
+        definition.base
+          .map(normalize)
+          .includes(base);
+
+      const quoteOK =
+        definition.quote
+          .map(normalize)
+          .includes(quote);
+
+      if (
+        baseOK &&
+        quoteOK
+      ) {
+        return {
+          requested,
+          krakenPair: key,
+          info
+        };
+      }
+    }
+  }
+
   throw new Error(
     `Kraken pair not found: ${requested}`
   );
 }
 
+
 /*
-  ----------------------------------------------------
-  MARKET DATA
-  ----------------------------------------------------
+========================================================
+ MARKET DATA
+========================================================
 */
 
 async function getCandles(
@@ -469,14 +491,14 @@ async function getCandles(
   limit = CONFIG.maxCandles
 ) {
   const resolved =
-    await resolveKrakenPair(
-      pair
-    );
+    await resolveKrakenPair(pair);
 
   const safeLimit =
-    clamp(
-      Number(limit) || 200,
-      100,
+    Math.min(
+      Math.max(
+        Number(limit) || 200,
+        CONFIG.minimumCandles
+      ),
       CONFIG.maxCandles
     );
 
@@ -492,8 +514,7 @@ async function getCandles(
       url,
       {
         headers: {
-          Accept:
-            "application/json"
+          Accept: "application/json"
         }
       }
     );
@@ -510,11 +531,10 @@ async function getCandles(
   let data;
 
   try {
-    data =
-      JSON.parse(text);
+    data = JSON.parse(text);
   } catch {
     throw new Error(
-      "Kraken OHLC returned invalid JSON"
+      "Kraken OHLC invalid JSON"
     );
   }
 
@@ -531,13 +551,14 @@ async function getCandles(
     data.result || {};
 
   const key =
-    Object.keys(result).find(
-      k => k !== "last"
-    );
+    Object.keys(result)
+      .find(
+        k => k !== "last"
+      );
 
   if (!key) {
     throw new Error(
-      "Kraken returned no candles"
+      "Kraken returned no OHLC data"
     );
   }
 
@@ -545,47 +566,26 @@ async function getCandles(
     result[key]
       .slice(-safeLimit)
       .map(c => ({
-        time:
-          Number(c[0]),
-
-        open:
-          Number(c[1]),
-
-        high:
-          Number(c[2]),
-
-        low:
-          Number(c[3]),
-
-        close:
-          Number(c[4]),
-
-        vwap:
-          Number(c[5]),
-
-        volume:
-          Number(c[6]),
-
-        trades:
-          Number(c[7])
+        time: Number(c[0]),
+        open: Number(c[1]),
+        high: Number(c[2]),
+        low: Number(c[3]),
+        close: Number(c[4]),
+        vwap: Number(c[5]),
+        volume: Number(c[6]),
+        trades: Number(c[7])
       }))
-      .filter(c =>
-        Number.isFinite(
-          c.close
-        ) &&
-        Number.isFinite(
-          c.high
-        ) &&
-        Number.isFinite(
-          c.low
-        ) &&
-        Number.isFinite(
-          c.volume
-        )
+      .filter(
+        c =>
+          Number.isFinite(c.close) &&
+          Number.isFinite(c.high) &&
+          Number.isFinite(c.low) &&
+          Number.isFinite(c.volume)
       );
 
   if (
-    candles.length < 60
+    candles.length <
+    CONFIG.minimumCandles
   ) {
     throw new Error(
       `Not enough candles: ${candles.length}`
@@ -594,25 +594,24 @@ async function getCandles(
 
   return {
     candles,
-
-    resolvedPair:
-      resolved.krakenPair,
-
     requestedPair:
-      resolved.requested
+      resolved.requested,
+    resolvedPair:
+      resolved.krakenPair
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  ANALYSIS ENGINE V3.1
-  ----------------------------------------------------
+========================================================
+ SIGNAL ANALYSIS
+========================================================
 */
 
 function analyze(candles) {
   if (
-    !candles ||
-    candles.length < 60
+    candles.length <
+    CONFIG.minimumCandles
   ) {
     return null;
   }
@@ -623,9 +622,7 @@ function analyze(candles) {
     );
 
   const price =
-    closes[
-      closes.length - 1
-    ];
+    closes[closes.length - 1];
 
   const ema20 =
     ema(closes, 20);
@@ -642,32 +639,21 @@ function analyze(candles) {
   const atr14 =
     atr(candles, 14);
 
-  const avgVol =
-    averageVolume(
-      candles,
-      20
-    );
-
-  const currentVolume =
-    candles[
-      candles.length - 1
-    ].volume;
+  const volRatio =
+    volumeRatio(candles, 20);
 
   if (
     ema20 === null ||
     ema50 === null ||
     rsi14 === null ||
     macdData === null ||
-    atr14 === null ||
-    avgVol === null
+    atr14 === null
   ) {
     return null;
   }
 
   /*
-    ------------------------------------------------
-    TREND
-    ------------------------------------------------
+    Trend
   */
 
   const bullishTrend =
@@ -679,313 +665,205 @@ function analyze(candles) {
     ema20 < ema50;
 
   /*
-    ------------------------------------------------
-    VOLUME
-    ------------------------------------------------
-  */
-
-  const volumeRatio =
-    avgVol > 0
-      ? currentVolume / avgVol
-      : 1;
-
-  const volumeConfirmed =
-    volumeRatio >= 0.8;
-
-  /*
-    ------------------------------------------------
-    MOMENTUM
-    ------------------------------------------------
+    Momentum
   */
 
   const bullishMomentum =
-    macdData.histogram > 0;
+    macdData.histogram > 0 &&
+    rsi14 > 50 &&
+    rsi14 < 70;
 
   const bearishMomentum =
-    macdData.histogram < 0;
+    macdData.histogram < 0 &&
+    rsi14 < 50 &&
+    rsi14 > 30;
 
   /*
-    ------------------------------------------------
-    RSI
-    ------------------------------------------------
+    RSI extreme protection
   */
 
-  const bullishRsi =
-    rsi14 >= 50 &&
-    rsi14 < 68;
+  const overbought =
+    rsi14 >= 70;
 
-  const bearishRsi =
-    rsi14 <= 50 &&
-    rsi14 > 32;
+  const oversold =
+    rsi14 <= 30;
 
   /*
-    ------------------------------------------------
-    SCORE
-    ------------------------------------------------
+    Volume confirmation
+  */
+
+  const volumeConfirmed =
+    volRatio === null ||
+    volRatio >= 0.8;
+
+  /*
+    Scoring
   */
 
   let buyScore = 0;
   let sellScore = 0;
 
-  /*
-    Price / EMA20
-  */
+  if (price > ema20) {
+    buyScore++;
+  }
+
+  if (ema20 > ema50) {
+    buyScore++;
+  }
 
   if (
-    price > ema20
+    rsi14 > 50 &&
+    rsi14 < 70
   ) {
     buyScore++;
   }
 
   if (
-    price < ema20
-  ) {
-    sellScore++;
-  }
-
-  /*
-    EMA trend
-  */
-
-  if (
-    ema20 > ema50
+    macdData.histogram > 0
   ) {
     buyScore++;
   }
 
+  if (price < ema20) {
+    sellScore++;
+  }
+
+  if (ema20 < ema50) {
+    sellScore++;
+  }
+
   if (
-    ema20 < ema50
+    rsi14 < 50 &&
+    rsi14 > 30
+  ) {
+    sellScore++;
+  }
+
+  if (
+    macdData.histogram < 0
   ) {
     sellScore++;
   }
 
   /*
-    RSI
+    Final signal.
+    Avoid buying overbought.
+    Avoid selling oversold.
   */
 
-  if (
-    bullishRsi
-  ) {
-    buyScore++;
-  }
-
-  if (
-    bearishRsi
-  ) {
-    sellScore++;
-  }
-
-  /*
-    MACD
-  */
-
-  if (
-    bullishMomentum
-  ) {
-    buyScore++;
-  }
-
-  if (
-    bearishMomentum
-  ) {
-    sellScore++;
-  }
-
-  /*
-    Volume
-  */
-
-  if (
-    volumeConfirmed &&
-    bullishTrend
-  ) {
-    buyScore++;
-  }
-
-  if (
-    volumeConfirmed &&
-    bearishTrend
-  ) {
-    sellScore++;
-  }
-
-  /*
-    Strong overbought / oversold protection
-  */
-
-  if (
-    rsi14 >= 70
-  ) {
-    buyScore =
-      Math.min(
-        buyScore,
-        2
-      );
-  }
-
-  if (
-    rsi14 <= 30
-  ) {
-    sellScore =
-      Math.min(
-        sellScore,
-        2
-      );
-  }
-
-  /*
-    SIGNAL
-  */
-
-  let signal =
-    "HOLD";
+  let signal = "HOLD";
 
   if (
     bullishTrend &&
     bullishMomentum &&
-    buyScore >= 4 &&
-    buyScore > sellScore &&
-    rsi14 < 68
+    volumeConfirmed &&
+    !overbought &&
+    buyScore >= 3
   ) {
-    signal =
-      "BUY";
+    signal = "BUY";
   }
 
   if (
     bearishTrend &&
     bearishMomentum &&
-    sellScore >= 4 &&
-    sellScore > buyScore &&
-    rsi14 > 32
+    volumeConfirmed &&
+    !oversold &&
+    sellScore >= 3
   ) {
-    signal =
-      "SELL";
-  }
-
-  const score =
-    Math.max(
-      buyScore,
-      sellScore
-    );
-
-  const confidence =
-    Math.round(
-      (score / 5) * 100
-    );
-
-  /*
-    ------------------------------------------------
-    RISK
-    ------------------------------------------------
-  */
-
-  let risk =
-    "LOW";
-
-  if (
-    rsi14 >= 70 ||
-    rsi14 <= 30
-  ) {
-    risk =
-      "HIGH";
-  } else if (
-    confidence < 85
-  ) {
-    risk =
-      "MEDIUM";
+    signal = "SELL";
   }
 
   /*
-    ------------------------------------------------
-    STOP / TARGET
-    ------------------------------------------------
+    Confidence is based on
+    trend + momentum + volume.
   */
 
-  let stopLoss =
-    null;
-
-  let takeProfit =
-    null;
-
-  let riskDistance =
-    null;
-
-  let riskAmount =
-    null;
-
-  let positionSize =
-    null;
-
-  let positionNotional =
-    null;
-
-  let action =
-    "NO_TRADE";
+  let confidence = 0;
 
   if (
-    signal === "BUY"
+    bullishTrend ||
+    bearishTrend
   ) {
-    stopLoss =
-      price -
-      atr14 * 1.5;
-
-    riskDistance =
-      price -
-      stopLoss;
-
-    takeProfit =
-      price +
-      riskDistance *
-      CONFIG.riskReward;
+    confidence += 30;
   }
 
   if (
-    signal === "SELL"
+    bullishMomentum ||
+    bearishMomentum
   ) {
-    stopLoss =
-      price +
-      atr14 * 1.5;
+    confidence += 30;
+  }
 
-    riskDistance =
-      stopLoss -
-      price;
-
-    takeProfit =
-      price -
-      riskDistance *
-      CONFIG.riskReward;
+  if (volumeConfirmed) {
+    confidence += 15;
   }
 
   if (
     signal === "BUY" ||
     signal === "SELL"
   ) {
-    riskAmount =
-      CONFIG.accountBalance *
-      (
-        CONFIG.riskPerTradePercent /
-        100
-      );
+    confidence += 25;
+  }
 
-    if (
-      riskDistance > 0
-    ) {
-      positionSize =
-        riskAmount /
-        riskDistance;
+  /*
+    Risk
+  */
 
-      positionNotional =
-        positionSize *
-        price;
+  let risk = "LOW";
 
-      if (
-        confidence >=
-        CONFIG.minConfidence
-      ) {
-        action =
-          signal;
-      }
-    }
+  if (
+    overbought ||
+    oversold
+  ) {
+    risk = "HIGH";
+  } else if (
+    confidence < 85
+  ) {
+    risk = "MEDIUM";
+  }
+
+  /*
+    Risk management only
+    when a valid trade exists.
+  */
+
+  let stopLoss = null;
+  let takeProfit = null;
+
+  if (
+    signal === "BUY" &&
+    confidence >=
+      CONFIG.minimumConfidence
+  ) {
+    stopLoss =
+      price -
+      atr14 * 1.5;
+
+    const distance =
+      price - stopLoss;
+
+    takeProfit =
+      price +
+      distance *
+      CONFIG.riskReward;
+  }
+
+  if (
+    signal === "SELL" &&
+    confidence >=
+      CONFIG.minimumConfidence
+  ) {
+    stopLoss =
+      price +
+      atr14 * 1.5;
+
+    const distance =
+      stopLoss - price;
+
+    takeProfit =
+      price -
+      distance *
+      CONFIG.riskReward;
   }
 
   return {
@@ -1007,51 +885,129 @@ function analyze(candles) {
 
     atr14,
 
-    averageVolume:
-      avgVol,
-
-    currentVolume,
-
-    volumeRatio,
+    volumeRatio:
+      volRatio,
 
     bullishTrend,
-
     bearishTrend,
 
     bullishMomentum,
-
     bearishMomentum,
 
     signal,
-
     confidence,
 
     buyScore,
-
     sellScore,
 
     risk,
 
     stopLoss,
-
-    takeProfit,
-
-    riskDistance,
-
-    riskAmount,
-
-    positionSize,
-
-    positionNotional,
-
-    action
+    takeProfit
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  TRADE EVALUATION
-  ----------------------------------------------------
+========================================================
+ RISK MANAGEMENT
+========================================================
+*/
+
+function calculateRiskManagement(setup) {
+  if (
+    !setup ||
+    !setup.stopLoss ||
+    !setup.takeProfit
+  ) {
+    return {
+      enabled: true,
+      action: "NO_TRADE",
+      entry: round(setup?.price),
+      stopLoss: null,
+      takeProfit: null,
+      riskDistance: null,
+      riskAmount: null,
+      positionSize: null,
+      positionNotional: null,
+      riskPerTradePercent:
+        CONFIG.riskPerTradePercent,
+      accountBalance:
+        CONFIG.accountBalance,
+      riskReward:
+        `1:${CONFIG.riskReward}`
+    };
+  }
+
+  const riskAmount =
+    CONFIG.accountBalance *
+    (CONFIG.riskPerTradePercent / 100);
+
+  const riskDistance =
+    Math.abs(
+      setup.price -
+      setup.stopLoss
+    );
+
+  if (
+    riskDistance <= 0
+  ) {
+    return {
+      enabled: true,
+      action: "NO_TRADE"
+    };
+  }
+
+  const positionSize =
+    riskAmount /
+    riskDistance;
+
+  const positionNotional =
+    positionSize *
+    setup.price;
+
+  return {
+    enabled: true,
+
+    action: "PAPER_TRADE_ONLY",
+
+    entry:
+      round(setup.price),
+
+    stopLoss:
+      round(setup.stopLoss),
+
+    takeProfit:
+      round(setup.takeProfit),
+
+    riskDistance:
+      round(riskDistance),
+
+    riskAmount:
+      round(riskAmount, 4),
+
+    positionSize:
+      round(positionSize, 8),
+
+    positionNotional:
+      round(positionNotional, 4),
+
+    riskPerTradePercent:
+      CONFIG.riskPerTradePercent,
+
+    accountBalance:
+      CONFIG.accountBalance,
+
+    riskReward:
+      `1:${CONFIG.riskReward}`
+  };
+}
+
+
+/*
+========================================================
+ TRADE EVALUATION
+========================================================
 */
 
 function evaluateTrade(
@@ -1059,27 +1015,19 @@ function evaluateTrade(
   candles,
   entryIndex
 ) {
-  const firstIndex =
+  const start =
     entryIndex + 1;
 
-  const lastIndex =
+  const end =
     Math.min(
       candles.length - 1,
-
       entryIndex +
       CONFIG.maxHoldingCandles
     );
 
-  if (
-    firstIndex >
-    lastIndex
-  ) {
-    return null;
-  }
-
   for (
-    let i = firstIndex;
-    i <= lastIndex;
+    let i = start;
+    i <= end;
     i++
   ) {
     const candle =
@@ -1097,9 +1045,9 @@ function evaluateTrade(
         setup.takeProfit;
 
       /*
-        Conservative assumption:
-        if both happen in same candle,
-        count as LOSS.
+        Conservative rule:
+        if both happen inside
+        same candle -> LOSS.
       */
 
       if (
@@ -1107,53 +1055,38 @@ function evaluateTrade(
         targetHit
       ) {
         return {
-          outcome:
-            "LOSS",
-
+          outcome: "LOSS",
           exitPrice:
             setup.stopLoss,
-
-          exitIndex:
-            i,
-
+          exitIndex: i,
           reason:
-            "STOP_AND_TARGET_SAME_CANDLE"
+            "STOP_AND_TARGET_SAME_CANDLE",
+          grossReturn: -1
         };
       }
 
-      if (
-        stopHit
-      ) {
+      if (stopHit) {
         return {
-          outcome:
-            "LOSS",
-
+          outcome: "LOSS",
           exitPrice:
             setup.stopLoss,
-
-          exitIndex:
-            i,
-
+          exitIndex: i,
           reason:
-            "STOP_LOSS"
+            "STOP_LOSS",
+          grossReturn: -1
         };
       }
 
-      if (
-        targetHit
-      ) {
+      if (targetHit) {
         return {
-          outcome:
-            "WIN",
-
+          outcome: "WIN",
           exitPrice:
             setup.takeProfit,
-
-          exitIndex:
-            i,
-
+          exitIndex: i,
           reason:
-            "TAKE_PROFIT"
+            "TAKE_PROFIT",
+          grossReturn:
+            CONFIG.riskReward
         };
       }
     }
@@ -1174,68 +1107,50 @@ function evaluateTrade(
         targetHit
       ) {
         return {
-          outcome:
-            "LOSS",
-
+          outcome: "LOSS",
           exitPrice:
             setup.stopLoss,
-
-          exitIndex:
-            i,
-
+          exitIndex: i,
           reason:
-            "STOP_AND_TARGET_SAME_CANDLE"
+            "STOP_AND_TARGET_SAME_CANDLE",
+          grossReturn: -1
         };
       }
 
-      if (
-        stopHit
-      ) {
+      if (stopHit) {
         return {
-          outcome:
-            "LOSS",
-
+          outcome: "LOSS",
           exitPrice:
             setup.stopLoss,
-
-          exitIndex:
-            i,
-
+          exitIndex: i,
           reason:
-            "STOP_LOSS"
+            "STOP_LOSS",
+          grossReturn: -1
         };
       }
 
-      if (
-        targetHit
-      ) {
+      if (targetHit) {
         return {
-          outcome:
-            "WIN",
-
+          outcome: "WIN",
           exitPrice:
             setup.takeProfit,
-
-          exitIndex:
-            i,
-
+          exitIndex: i,
           reason:
-            "TAKE_PROFIT"
+            "TAKE_PROFIT",
+          grossReturn:
+            CONFIG.riskReward
         };
       }
     }
   }
 
   const exitIndex =
-    lastIndex;
+    end;
 
   const exitPrice =
-    candles[
-      exitIndex
-    ].close;
+    candles[exitIndex].close;
 
-  let grossReturn =
-    0;
+  let grossReturn = 0;
 
   if (
     setup.signal === "BUY"
@@ -1276,10 +1191,11 @@ function evaluateTrade(
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  BACKTEST
-  ----------------------------------------------------
+========================================================
+ BACKTEST
+========================================================
 */
 
 async function runBacktest(
@@ -1303,8 +1219,7 @@ async function runBacktest(
   let peakEquity =
     equity;
 
-  let maxDrawdown =
-    0;
+  let maxDrawdown = 0;
 
   let wins = 0;
   let losses = 0;
@@ -1315,15 +1230,18 @@ async function runBacktest(
   const trades = [];
 
   let nextAvailable =
-    60;
+    CONFIG.minimumCandles;
 
   for (
-    let i = 60;
-    i < candles.length - 1;
+    let i =
+      CONFIG.minimumCandles;
+    i <
+      candles.length - 1;
     i++
   ) {
     if (
-      i < nextAvailable
+      i <
+      nextAvailable
     ) {
       continue;
     }
@@ -1341,6 +1259,11 @@ async function runBacktest(
       continue;
     }
 
+    /*
+      Only trade when signal
+      passes confidence filter.
+    */
+
     if (
       setup.signal !== "BUY" &&
       setup.signal !== "SELL"
@@ -1350,14 +1273,19 @@ async function runBacktest(
 
     if (
       setup.confidence <
-      CONFIG.minConfidence
+      CONFIG.minimumConfidence
     ) {
       continue;
     }
 
+    const risk =
+      calculateRiskManagement(
+        setup
+      );
+
     if (
-      setup.action !==
-      setup.signal
+      risk.action !==
+      "PAPER_TRADE_ONLY"
     ) {
       continue;
     }
@@ -1373,31 +1301,6 @@ async function runBacktest(
       continue;
     }
 
-    let grossReturn;
-
-    if (
-      result.reason ===
-      "STOP_LOSS"
-    ) {
-      grossReturn =
-        -1;
-    } else if (
-      result.reason ===
-      "TAKE_PROFIT"
-    ) {
-      grossReturn =
-        CONFIG.riskReward;
-    } else if (
-      result.reason ===
-      "STOP_AND_TARGET_SAME_CANDLE"
-    ) {
-      grossReturn =
-        -1;
-    } else {
-      grossReturn =
-        result.grossReturn;
-    }
-
     const fees =
       CONFIG.feePercent * 2;
 
@@ -1405,7 +1308,7 @@ async function runBacktest(
       CONFIG.slippagePercent * 2;
 
     const netReturn =
-      grossReturn -
+      result.grossReturn -
       fees -
       slippage;
 
@@ -1413,17 +1316,17 @@ async function runBacktest(
       netReturn > 0
     ) {
       wins++;
-
       grossProfit +=
         netReturn;
     } else {
       losses++;
-
       grossLoss +=
-        Math.abs(
-          netReturn
-        );
+        Math.abs(netReturn);
     }
+
+    /*
+      Apply return to equity.
+    */
 
     equity =
       equity *
@@ -1454,16 +1357,13 @@ async function runBacktest(
     trades.push({
       entryTime:
         new Date(
-          candles[i].time *
-          1000
+          candles[i].time * 1000
         ).toISOString(),
 
       exitTime:
         new Date(
-          candles[
-            result.exitIndex
-          ].time *
-          1000
+          candles[result.exitIndex]
+            .time * 1000
         ).toISOString(),
 
       signal:
@@ -1473,36 +1373,22 @@ async function runBacktest(
         setup.confidence,
 
       entry:
-        round(
-          setup.price
-        ),
+        round(setup.price, 2),
 
       exit:
-        round(
-          result.exitPrice
-        ),
+        round(result.exitPrice, 2),
 
       stopLoss:
-        round(
-          setup.stopLoss
-        ),
+        round(setup.stopLoss, 2),
 
       takeProfit:
-        round(
-          setup.takeProfit
-        ),
+        round(setup.takeProfit, 2),
 
       riskAmount:
-        round(
-          setup.riskAmount,
-          4
-        ),
+        risk.riskAmount,
 
       positionSize:
-        round(
-          setup.positionSize,
-          8
-        ),
+        risk.positionSize,
 
       outcome:
         netReturn > 0
@@ -1514,7 +1400,7 @@ async function runBacktest(
 
       grossReturn:
         round(
-          grossReturn,
+          result.grossReturn,
           3
         ),
 
@@ -1525,9 +1411,14 @@ async function runBacktest(
         )
     });
 
+    /*
+      Prevent overlapping trades.
+    */
+
     nextAvailable =
       result.exitIndex +
-      CONFIG.cooldownCandles;
+      CONFIG.cooldownCandles +
+      1;
   }
 
   const totalTrades =
@@ -1535,10 +1426,9 @@ async function runBacktest(
 
   const winRate =
     totalTrades > 0
-      ? (
-          wins /
-          totalTrades
-        ) * 100
+      ? (wins /
+          totalTrades) *
+        100
       : 0;
 
   const profitFactor =
@@ -1548,8 +1438,7 @@ async function runBacktest(
       : null;
 
   return {
-    success:
-      true,
+    success: true,
 
     project:
       "AI Trader Pro",
@@ -1583,7 +1472,7 @@ async function runBacktest(
         CONFIG.riskPerTradePercent,
 
       minimumConfidence:
-        CONFIG.minConfidence,
+        CONFIG.minimumConfidence,
 
       riskReward:
         `1:${CONFIG.riskReward}`,
@@ -1607,9 +1496,7 @@ async function runBacktest(
       losses,
 
       winRate:
-        round(
-          winRate
-        ),
+        round(winRate, 2),
 
       profitFactor:
         round(
@@ -1641,7 +1528,7 @@ async function runBacktest(
     },
 
     note:
-      "Historical simulation only. Fees and slippage included. No guarantee of future performance.",
+      "Historical simulation only. No real orders are executed. Fees and slippage are included. Past performance does not guarantee future results.",
 
     recentTrades:
       trades.slice(-20),
@@ -1651,41 +1538,444 @@ async function runBacktest(
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  JSON
-  ----------------------------------------------------
+========================================================
+ API: HOME
+========================================================
 */
 
-function json(
-  data,
-  status = 200
-) {
-  return new Response(
-    JSON.stringify(
-      data
-    ),
-    {
-      status,
+async function home() {
+  return json({
+    name:
+      "AI Trader Pro",
 
-      headers: {
-        "Content-Type":
-          "application/json; charset=utf-8",
+    version:
+      CONFIG.version,
 
-        "Cache-Control":
-          "no-store",
+    status:
+      "online",
 
-        "Access-Control-Allow-Origin":
-          "*"
-      }
-    }
-  );
+    marketData:
+      "Kraken",
+
+    realTrading:
+      false,
+
+    message:
+      "AI Trader Pro API is running",
+
+    endpoints: [
+      "/",
+      "/api/status",
+      "/api/pair?pair=XBTUSD",
+      "/api/analyze?pair=XBTUSD&interval=60",
+      "/api/analyze?pair=XBTUSD&interval=240",
+      "/api/analyze?pair=ETHUSD&interval=60",
+      "/api/analyze?pair=ETHUSD&interval=240",
+      "/api/backtest?pair=XBTUSD&interval=60&limit=720",
+      "/api/backtest?pair=XBTUSD&interval=240&limit=720"
+    ]
+  });
 }
 
+
 /*
-  ----------------------------------------------------
-  WORKER
-  ----------------------------------------------------
+========================================================
+ API: STATUS
+========================================================
+*/
+
+async function status() {
+  return json({
+    project:
+      "AI Trader Pro",
+
+    version:
+      CONFIG.version,
+
+    status:
+      "online",
+
+    marketData:
+      "Kraken",
+
+    realTrading:
+      false,
+
+    indicators: [
+      "RSI14",
+      "EMA20",
+      "EMA50",
+      "MACD",
+      "ATR14"
+    ],
+
+    filters: [
+      "Trend",
+      "Momentum",
+      "RSI protection",
+      "Volume confirmation",
+      "Confidence"
+    ],
+
+    strategy:
+      "Trend + Momentum + Volume confirmation",
+
+    riskManagement: {
+      enabled: true,
+
+      riskPerTradePercent:
+        CONFIG.riskPerTradePercent,
+
+      accountBalance:
+        CONFIG.accountBalance,
+
+      riskReward:
+        `1:${CONFIG.riskReward}`
+    },
+
+    backtest:
+      "Non-overlapping multi-candle historical simulation",
+
+    timestamp:
+      new Date().toISOString()
+  });
+}
+
+
+/*
+========================================================
+ API: PAIR
+========================================================
+*/
+
+async function pairEndpoint(url) {
+  const pair =
+    (
+      url.searchParams.get("pair") ||
+      "XBTUSD"
+    ).toUpperCase();
+
+  try {
+    const resolved =
+      await resolveKrakenPair(
+        pair
+      );
+
+    return json({
+      success: true,
+
+      requestedPair:
+        pair,
+
+      krakenPair:
+        resolved.krakenPair,
+
+      wsname:
+        resolved.info.wsname ||
+        null,
+
+      altname:
+        resolved.info.altname ||
+        null,
+
+      source:
+        "Kraken AssetPairs",
+
+      timestamp:
+        new Date().toISOString()
+    });
+
+  } catch (error) {
+    return json(
+      {
+        success: false,
+
+        error:
+          "Kraken pair resolution error",
+
+        details:
+          String(error)
+      },
+      502
+    );
+  }
+}
+
+
+/*
+========================================================
+ API: ANALYZE
+========================================================
+*/
+
+async function analyzeEndpoint(url) {
+  const pair =
+    (
+      url.searchParams.get("pair") ||
+      "XBTUSD"
+    ).toUpperCase();
+
+  const interval =
+    Number(
+      url.searchParams.get(
+        "interval"
+      )
+    ) || 60;
+
+  if (
+    !ALLOWED_INTERVALS.includes(
+      interval
+    )
+  ) {
+    return json(
+      {
+        success: false,
+
+        error:
+          "Invalid interval",
+
+        allowed:
+          ALLOWED_INTERVALS
+      },
+      400
+    );
+  }
+
+  try {
+    const market =
+      await getCandles(
+        pair,
+        interval,
+        CONFIG.maxCandles
+      );
+
+    const result =
+      analyze(
+        market.candles
+      );
+
+    if (!result) {
+      throw new Error(
+        "Analysis unavailable"
+      );
+    }
+
+    const riskManagement =
+      calculateRiskManagement(
+        result
+      );
+
+    return json({
+      success: true,
+
+      project:
+        "AI Trader Pro",
+
+      version:
+        CONFIG.version,
+
+      pair:
+        market.requestedPair,
+
+      krakenPair:
+        market.resolvedPair,
+
+      interval:
+        `${interval}m`,
+
+      source:
+        "Kraken",
+
+      market: {
+        price:
+          round(result.price, 2),
+
+        candles:
+          market.candles.length
+      },
+
+      indicators: {
+        rsi14:
+          round(result.rsi14, 2),
+
+        ema20:
+          round(result.ema20, 2),
+
+        ema50:
+          round(result.ema50, 2),
+
+        macd:
+          round(result.macd, 4),
+
+        macdSignal:
+          round(result.macdSignal, 4),
+
+        macdHistogram:
+          round(
+            result.macdHistogram,
+            4
+          ),
+
+        atr14:
+          round(result.atr14, 2)
+      },
+
+      filters: {
+        bullishTrend:
+          result.bullishTrend,
+
+        bearishTrend:
+          result.bearishTrend,
+
+        bullishMomentum:
+          result.bullishMomentum,
+
+        bearishMomentum:
+          result.bearishMomentum,
+
+        volumeRatio:
+          round(
+            result.volumeRatio,
+            3
+          )
+      },
+
+      analysis: {
+        signal:
+          result.signal,
+
+        confidence:
+          result.confidence,
+
+        buyScore:
+          result.buyScore,
+
+        sellScore:
+          result.sellScore,
+
+        risk:
+          result.risk
+      },
+
+      riskManagement,
+
+      timestamp:
+        new Date().toISOString()
+    });
+
+  } catch (error) {
+    return json(
+      {
+        success: false,
+
+        error:
+          "Market analysis error",
+
+        details:
+          String(error)
+      },
+      502
+    );
+  }
+}
+
+
+/*
+========================================================
+ API: BACKTEST
+========================================================
+*/
+
+async function backtestEndpoint(url) {
+  /*
+    IMPORTANT:
+    Read each query parameter independently.
+    This prevents the previous bug where
+    pair could accidentally become:
+
+    XBTUSD&INTERVAL=60&LIMIT=200
+  */
+
+  const pair =
+    (
+      url.searchParams.get("pair") ||
+      "XBTUSD"
+    ).toUpperCase();
+
+  const interval =
+    Number(
+      url.searchParams.get(
+        "interval"
+      )
+    ) || 60;
+
+  const requestedLimit =
+    Number(
+      url.searchParams.get(
+        "limit"
+      )
+    ) || 720;
+
+  const limit =
+    Math.min(
+      Math.max(
+        requestedLimit,
+        CONFIG.minimumCandles
+      ),
+      CONFIG.maxCandles
+    );
+
+  if (
+    !ALLOWED_INTERVALS.includes(
+      interval
+    )
+  ) {
+    return json(
+      {
+        success: false,
+
+        error:
+          "Invalid interval",
+
+        allowed:
+          ALLOWED_INTERVALS
+      },
+      400
+    );
+  }
+
+  try {
+    return json(
+      await runBacktest(
+        pair,
+        interval,
+        limit
+      )
+    );
+
+  } catch (error) {
+    return json(
+      {
+        success: false,
+
+        error:
+          "Backtest error",
+
+        details:
+          String(error)
+      },
+      502
+    );
+  }
+}
+
+
+/*
+========================================================
+ MAIN WORKER
+========================================================
 */
 
 export default {
@@ -1702,25 +1992,7 @@ export default {
     if (
       url.pathname === "/"
     ) {
-      return json({
-        name:
-          "AI Trader Pro",
-
-        version:
-          CONFIG.version,
-
-        status:
-          "online",
-
-        marketData:
-          "Kraken",
-
-        realTrading:
-          CONFIG.realTrading,
-
-        message:
-          "AI Trader Pro API is running"
-      });
+      return home();
     }
 
     /*
@@ -1731,66 +2003,7 @@ export default {
       url.pathname ===
       "/api/status"
     ) {
-      return json({
-        project:
-          "AI Trader Pro",
-
-        version:
-          CONFIG.version,
-
-        status:
-          "online",
-
-        marketData:
-          "Kraken",
-
-        indicators: [
-          "RSI14",
-          "EMA20",
-          "EMA50",
-          "MACD",
-          "ATR14"
-        ],
-
-        filters: [
-          "Trend Filter",
-          "Momentum Filter",
-          "Volume Filter",
-          "RSI Protection"
-        ],
-
-        strategy:
-          "5-condition confirmation",
-
-        backtest:
-          "Risk-based multi-candle",
-
-        riskManagement: {
-          enabled:
-            true,
-
-          riskPerTradePercent:
-            CONFIG.riskPerTradePercent,
-
-          accountBalance:
-            CONFIG.accountBalance,
-
-          riskReward:
-            `1:${CONFIG.riskReward}`
-        },
-
-        realTrading:
-          CONFIG.realTrading,
-
-        supportedPairs:
-          SUPPORTED_PAIRS,
-
-        allowedIntervals:
-          ALLOWED_INTERVALS,
-
-        timestamp:
-          new Date().toISOString()
-      });
+      return status();
     }
 
     /*
@@ -1801,59 +2014,9 @@ export default {
       url.pathname ===
       "/api/pair"
     ) {
-      const pair =
-        (
-          url.searchParams.get(
-            "pair"
-          ) ||
-          "XBTUSD"
-        ).toUpperCase();
-
-      try {
-        const resolved =
-          await resolveKrakenPair(
-            pair
-          );
-
-        return json({
-          success:
-            true,
-
-          requestedPair:
-            pair,
-
-          krakenPair:
-            resolved.krakenPair,
-
-          wsname:
-            resolved.info.wsname ||
-            null,
-
-          altname:
-            resolved.info.altname ||
-            null,
-
-          source:
-            "Kraken AssetPairs",
-
-          timestamp:
-            new Date().toISOString()
-        });
-      } catch (error) {
-        return json(
-          {
-            success:
-              false,
-
-            error:
-              "Kraken pair resolution error",
-
-            details:
-              String(error)
-          },
-          502
-        );
-      }
+      return pairEndpoint(
+        url
+      );
     }
 
     /*
@@ -1864,232 +2027,9 @@ export default {
       url.pathname ===
       "/api/analyze"
     ) {
-      const pair =
-        (
-          url.searchParams.get(
-            "pair"
-          ) ||
-          "XBTUSD"
-        ).toUpperCase();
-
-      const interval =
-        Number(
-          url.searchParams.get(
-            "interval"
-          )
-        ) || 60;
-
-      if (
-        !ALLOWED_INTERVALS.includes(
-          interval
-        )
-      ) {
-        return json(
-          {
-            error:
-              "Invalid interval",
-
-            allowed:
-              ALLOWED_INTERVALS
-          },
-          400
-        );
-      }
-
-      try {
-        const market =
-          await getCandles(
-            pair,
-            interval,
-            CONFIG.maxCandles
-          );
-
-        const result =
-          analyze(
-            market.candles
-          );
-
-        if (!result) {
-          throw new Error(
-            "Not enough market data"
-          );
-        }
-
-        return json({
-          success:
-            true,
-
-          project:
-            "AI Trader Pro",
-
-          version:
-            CONFIG.version,
-
-          pair,
-
-          krakenPair:
-            market.resolvedPair,
-
-          interval:
-            `${interval}m`,
-
-          source:
-            "Kraken",
-
-          market: {
-            price:
-              round(
-                result.price
-              ),
-
-            candles:
-              market.candles.length
-          },
-
-          indicators: {
-            rsi14:
-              round(
-                result.rsi14
-              ),
-
-            ema20:
-              round(
-                result.ema20
-              ),
-
-            ema50:
-              round(
-                result.ema50
-              ),
-
-            macd:
-              round(
-                result.macd,
-                4
-              ),
-
-            macdSignal:
-              round(
-                result.macdSignal,
-                4
-              ),
-
-            macdHistogram:
-              round(
-                result.macdHistogram,
-                4
-              ),
-
-            atr14:
-              round(
-                result.atr14
-              )
-          },
-
-          filters: {
-            bullishTrend:
-              result.bullishTrend,
-
-            bearishTrend:
-              result.bearishTrend,
-
-            bullishMomentum:
-              result.bullishMomentum,
-
-            bearishMomentum:
-              result.bearishMomentum,
-
-            volumeRatio:
-              round(
-                result.volumeRatio,
-                3
-              )
-          },
-
-          analysis: {
-            signal:
-              result.signal,
-
-            confidence:
-              result.confidence,
-
-            buyScore:
-              result.buyScore,
-
-            sellScore:
-              result.sellScore,
-
-            risk:
-              result.risk
-          },
-
-          riskManagement: {
-            entry:
-              round(
-                result.price
-              ),
-
-            stopLoss:
-              round(
-                result.stopLoss
-              ),
-
-            takeProfit:
-              round(
-                result.takeProfit
-              ),
-
-            riskDistance:
-              round(
-                result.riskDistance
-              ),
-
-            riskAmount:
-              round(
-                result.riskAmount,
-                4
-              ),
-
-            positionSize:
-              round(
-                result.positionSize,
-                8
-              ),
-
-            positionNotional:
-              round(
-                result.positionNotional,
-                4
-              ),
-
-            riskPerTradePercent:
-              CONFIG.riskPerTradePercent,
-
-            accountBalance:
-              CONFIG.accountBalance,
-
-            riskReward:
-              `1:${CONFIG.riskReward}`,
-
-            action:
-              result.action
-          },
-
-          timestamp:
-            new Date().toISOString()
-        });
-      } catch (error) {
-        return json(
-          {
-            error:
-              "Market analysis error",
-
-            details:
-              String(error)
-          },
-          502
-        );
-      }
+      return analyzeEndpoint(
+        url
+      );
     }
 
     /*
@@ -2100,90 +2040,26 @@ export default {
       url.pathname ===
       "/api/backtest"
     ) {
-      const pair =
-        (
-          url.searchParams.get(
-            "pair"
-          ) ||
-          "XBTUSD"
-        ).toUpperCase();
-
-      const interval =
-        Number(
-          url.searchParams.get(
-            "interval"
-          )
-        ) || 60;
-
-      const limit =
-        Math.min(
-          Math.max(
-            Number(
-              url.searchParams.get(
-                "limit"
-              )
-            ) || 200,
-            100
-          ),
-          CONFIG.maxCandles
-        );
-
-      if (
-        !ALLOWED_INTERVALS.includes(
-          interval
-        )
-      ) {
-        return json(
-          {
-            error:
-              "Invalid interval",
-
-            allowed:
-              ALLOWED_INTERVALS
-          },
-          400
-        );
-      }
-
-      try {
-        return json(
-          await runBacktest(
-            pair,
-            interval,
-            limit
-          )
-        );
-      } catch (error) {
-        return json(
-          {
-            error:
-              "Backtest error",
-
-            details:
-              String(error)
-          },
-          502
-        );
-      }
+      return backtestEndpoint(
+        url
+      );
     }
 
     /*
-      UNKNOWN ROUTE
+      UNKNOWN
     */
 
     return json(
       {
+        success: false,
+
         error:
           "Not Found",
-
-        version:
-          CONFIG.version,
 
         availableEndpoints: [
           "/",
           "/api/status",
           "/api/pair?pair=XBTUSD",
-          "/api/pair?pair=ETHUSD",
           "/api/analyze?pair=XBTUSD&interval=60",
           "/api/analyze?pair=XBTUSD&interval=240",
           "/api/analyze?pair=ETHUSD&interval=60",
