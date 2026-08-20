@@ -4,31 +4,55 @@ const CONFIG = {
   feePercent: 0.1,
   slippagePercent: 0.05,
 
-  riskPerTradePercent: 1,
   accountBalance: 100,
+  riskPerTradePercent: 1,
 
   minConfidence: 75,
+
   riskReward: 2,
 
   maxHoldingCandles: 12,
-  maxCandles: 200
+
+  maxCandles: 200,
+
+  atrStopMultiplier: 1.5
 };
 
 const ALLOWED_INTERVALS = [60, 240];
+
+const PAIR_ALIASES = {
+  BTC: ["BTC", "XBT"],
+  XBT: ["BTC", "XBT"],
+  ETH: ["ETH"]
+};
+
+
+/*
+====================================================
+UTILITIES
+====================================================
+*/
 
 function round(value, decimals = 2) {
   if (!Number.isFinite(value)) return null;
   return Number(value.toFixed(decimals));
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+
 /*
-  ----------------------------------------------------
-  TECHNICAL INDICATORS
-  ----------------------------------------------------
+====================================================
+EMA
+====================================================
 */
 
 function ema(values, period) {
-  if (values.length < period) return null;
+  if (!Array.isArray(values) || values.length < period) {
+    return null;
+  }
 
   const multiplier = 2 / (period + 1);
 
@@ -45,8 +69,17 @@ function ema(values, period) {
   return result;
 }
 
+
+/*
+====================================================
+RSI
+====================================================
+*/
+
 function rsi(values, period = 14) {
-  if (values.length <= period) return null;
+  if (!Array.isArray(values) || values.length <= period) {
+    return null;
+  }
 
   let gains = 0;
   let losses = 0;
@@ -54,8 +87,11 @@ function rsi(values, period = 14) {
   for (let i = 1; i <= period; i++) {
     const change = values[i] - values[i - 1];
 
-    if (change > 0) gains += change;
-    if (change < 0) losses += Math.abs(change);
+    if (change > 0) {
+      gains += change;
+    } else if (change < 0) {
+      losses += Math.abs(change);
+    }
   }
 
   let avgGain = gains / period;
@@ -74,14 +110,27 @@ function rsi(values, period = 14) {
       ((avgLoss * (period - 1)) + loss) / period;
   }
 
-  if (avgLoss === 0) return 100;
+  if (avgLoss === 0) {
+    return 100;
+  }
 
   const rs = avgGain / avgLoss;
 
   return 100 - 100 / (1 + rs);
 }
 
+
+/*
+====================================================
+MACD
+====================================================
+*/
+
 function macd(values) {
+  if (!Array.isArray(values) || values.length < 35) {
+    return null;
+  }
+
   const lines = [];
 
   for (let i = 26; i <= values.length; i++) {
@@ -95,12 +144,16 @@ function macd(values) {
     }
   }
 
-  if (lines.length < 9) return null;
+  if (lines.length < 9) {
+    return null;
+  }
 
   const line = lines[lines.length - 1];
   const signal = ema(lines, 9);
 
-  if (signal === null) return null;
+  if (signal === null) {
+    return null;
+  }
 
   return {
     line,
@@ -109,8 +162,17 @@ function macd(values) {
   };
 }
 
+
+/*
+====================================================
+ATR
+====================================================
+*/
+
 function atr(candles, period = 14) {
-  if (candles.length <= period) return null;
+  if (!Array.isArray(candles) || candles.length <= period) {
+    return null;
+  }
 
   const ranges = [];
 
@@ -118,13 +180,13 @@ function atr(candles, period = 14) {
     const current = candles[i];
     const previous = candles[i - 1];
 
-    ranges.push(
-      Math.max(
-        current.high - current.low,
-        Math.abs(current.high - previous.close),
-        Math.abs(current.low - previous.close)
-      )
+    const range = Math.max(
+      current.high - current.low,
+      Math.abs(current.high - previous.close),
+      Math.abs(current.low - previous.close)
     );
+
+    ranges.push(range);
   }
 
   let value =
@@ -140,10 +202,11 @@ function atr(candles, period = 14) {
   return value;
 }
 
+
 /*
-  ----------------------------------------------------
-  KRAKEN
-  ----------------------------------------------------
+====================================================
+KRAKEN SYMBOL NORMALIZATION
+====================================================
 */
 
 function normalizeSymbol(value) {
@@ -151,6 +214,7 @@ function normalizeSymbol(value) {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
 }
+
 
 function pairMatches(info, requested) {
   const req = normalizeSymbol(requested);
@@ -169,9 +233,17 @@ function pairMatches(info, requested) {
     ""
   );
 
-  const altname = normalizeSymbol(info.altname || "");
-  const wsname = normalizeSymbol(info.wsname || "");
-  const pairName = normalizeSymbol(info.pair || "");
+  const altname = normalizeSymbol(
+    info.altname || ""
+  );
+
+  const wsname = normalizeSymbol(
+    info.wsname || ""
+  );
+
+  const pairName = normalizeSymbol(
+    info.pair || ""
+  );
 
   const possible = [
     altname,
@@ -203,9 +275,17 @@ function pairMatches(info, requested) {
   return false;
 }
 
+
+/*
+====================================================
+KRAKEN PAIR RESOLUTION
+====================================================
+*/
+
 async function resolveKrakenPair(requestedPair) {
   const requested =
-    String(requestedPair || "XBTUSD").toUpperCase();
+    String(requestedPair || "XBTUSD")
+      .toUpperCase();
 
   const directCandidates = [];
 
@@ -261,7 +341,9 @@ async function resolveKrakenPair(requestedPair) {
   }
 
   if (data.error && data.error.length) {
-    throw new Error(data.error.join(", "));
+    throw new Error(
+      data.error.join(", ")
+    );
   }
 
   const result = data.result || {};
@@ -326,10 +408,11 @@ async function resolveKrakenPair(requestedPair) {
   );
 }
 
+
 /*
-  ----------------------------------------------------
-  MARKET DATA
-  ----------------------------------------------------
+====================================================
+MARKET DATA
+====================================================
 */
 
 async function getCandles(
@@ -342,16 +425,20 @@ async function getCandles(
 
   const url =
     "https://api.kraken.com/0/public/OHLC" +
-    `?pair=${encodeURIComponent(resolved.krakenPair)}` +
+    `?pair=${encodeURIComponent(
+      resolved.krakenPair
+    )}` +
     `&interval=${interval}`;
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json"
-    }
-  });
+  const response =
+    await fetch(url, {
+      headers: {
+        Accept: "application/json"
+      }
+    });
 
-  const text = await response.text();
+  const text =
+    await response.text();
 
   if (!response.ok) {
     throw new Error(
@@ -370,14 +457,18 @@ async function getCandles(
   }
 
   if (data.error && data.error.length) {
-    throw new Error(data.error.join(", "));
+    throw new Error(
+      data.error.join(", ")
+    );
   }
 
-  const result = data.result || {};
+  const result =
+    data.result || {};
 
-  const key = Object.keys(result).find(
-    k => k !== "last"
-  );
+  const key =
+    Object.keys(result).find(
+      k => k !== "last"
+    );
 
   if (!key) {
     throw new Error(
@@ -417,24 +508,150 @@ async function getCandles(
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  ANALYSIS V3
-  ----------------------------------------------------
+====================================================
+RISK MANAGEMENT
+====================================================
+*/
+
+function calculateRiskManagement(
+  price,
+  atrValue,
+  signal
+) {
+  if (
+    !Number.isFinite(price) ||
+    !Number.isFinite(atrValue) ||
+    atrValue <= 0
+  ) {
+    return null;
+  }
+
+  const riskDistance =
+    atrValue * CONFIG.atrStopMultiplier;
+
+  let stopLoss = null;
+  let takeProfit = null;
+
+  if (signal === "BUY") {
+    stopLoss =
+      price - riskDistance;
+
+    takeProfit =
+      price +
+      riskDistance * CONFIG.riskReward;
+  }
+
+  if (signal === "SELL") {
+    stopLoss =
+      price + riskDistance;
+
+    takeProfit =
+      price -
+      riskDistance * CONFIG.riskReward;
+  }
+
+  /*
+    For HOLD we still calculate a neutral
+    risk envelope around the current price.
+  */
+
+  if (signal === "HOLD") {
+    stopLoss =
+      price - riskDistance;
+
+    takeProfit =
+      price + riskDistance * CONFIG.riskReward;
+  }
+
+  const riskAmount =
+    CONFIG.accountBalance *
+    (CONFIG.riskPerTradePercent / 100);
+
+  let positionSize = null;
+
+  if (riskDistance > 0) {
+    positionSize =
+      riskAmount / riskDistance;
+  }
+
+  const notional =
+    positionSize !== null
+      ? positionSize * price
+      : null;
+
+  return {
+    entry: round(price, 2),
+
+    stopLoss:
+      round(stopLoss, 2),
+
+    takeProfit:
+      round(takeProfit, 2),
+
+    riskDistance:
+      round(riskDistance, 2),
+
+    riskAmount:
+      round(riskAmount, 2),
+
+    positionSize:
+      round(positionSize, 8),
+
+    positionNotional:
+      round(notional, 2),
+
+    riskPerTradePercent:
+      CONFIG.riskPerTradePercent,
+
+    accountBalance:
+      CONFIG.accountBalance,
+
+    riskReward:
+      `1:${CONFIG.riskReward}`,
+
+    action:
+      signal === "BUY"
+        ? "LONG"
+        : signal === "SELL"
+          ? "SHORT"
+          : "NO_TRADE"
+  };
+}
+
+
+/*
+====================================================
+ANALYSIS
+====================================================
 */
 
 function analyze(candles) {
-  if (candles.length < 60) return null;
+  if (!candles || candles.length < 60) {
+    return null;
+  }
 
-  const closes = candles.map(c => c.close);
+  const closes =
+    candles.map(c => c.close);
 
-  const price = closes[closes.length - 1];
+  const price =
+    closes[closes.length - 1];
 
-  const ema20 = ema(closes, 20);
-  const ema50 = ema(closes, 50);
-  const rsi14 = rsi(closes, 14);
-  const macdData = macd(closes);
-  const atr14 = atr(candles, 14);
+  const ema20 =
+    ema(closes, 20);
+
+  const ema50 =
+    ema(closes, 50);
+
+  const rsi14 =
+    rsi(closes, 14);
+
+  const macdData =
+    macd(closes);
+
+  const atr14 =
+    atr(candles, 14);
 
   if (
     ema20 === null ||
@@ -450,8 +667,7 @@ function analyze(candles) {
   let sellScore = 0;
 
   /*
-    Condition 1
-    Price vs EMA20
+    1. Price vs EMA20
   */
 
   if (price > ema20) {
@@ -463,8 +679,7 @@ function analyze(candles) {
   }
 
   /*
-    Condition 2
-    EMA20 vs EMA50
+    2. EMA20 vs EMA50
   */
 
   if (ema20 > ema50) {
@@ -476,21 +691,25 @@ function analyze(candles) {
   }
 
   /*
-    Condition 3
-    RSI
+    3. RSI
   */
 
-  if (rsi14 >= 50 && rsi14 < 70) {
+  if (
+    rsi14 >= 50 &&
+    rsi14 < 70
+  ) {
     buyScore++;
   }
 
-  if (rsi14 <= 50 && rsi14 > 30) {
+  if (
+    rsi14 <= 50 &&
+    rsi14 > 30
+  ) {
     sellScore++;
   }
 
   /*
-    Condition 4
-    MACD
+    4. MACD
   */
 
   if (macdData.histogram > 0) {
@@ -520,10 +739,15 @@ function analyze(candles) {
   }
 
   const score =
-    Math.max(buyScore, sellScore);
+    Math.max(
+      buyScore,
+      sellScore
+    );
 
   const confidence =
-    Math.round((score / 4) * 100);
+    Math.round(
+      (score / 4) * 100
+    );
 
   let risk = "LOW";
 
@@ -532,56 +756,18 @@ function analyze(candles) {
     rsi14 <= 30
   ) {
     risk = "HIGH";
-  } else if (confidence < 85) {
+  } else if (
+    confidence < 85
+  ) {
     risk = "MEDIUM";
   }
 
-  /*
-    V3 FIX:
-    Always calculate risk levels.
-    HOLD gets reference levels too.
-  */
-
-  let stopLoss;
-  let takeProfit;
-
-  if (signal === "SELL") {
-    stopLoss =
-      price + atr14 * 1.5;
-
-    const riskAmount =
-      stopLoss - price;
-
-    takeProfit =
-      price -
-      riskAmount * CONFIG.riskReward;
-  } else {
-    stopLoss =
-      price - atr14 * 1.5;
-
-    const riskAmount =
-      price - stopLoss;
-
-    takeProfit =
-      price +
-      riskAmount * CONFIG.riskReward;
-  }
-
-  /*
-    Risk based position sizing
-  */
-
-  const riskCapital =
-    CONFIG.accountBalance *
-    (CONFIG.riskPerTradePercent / 100);
-
-  const priceRisk =
-    Math.abs(price - stopLoss);
-
-  const positionSize =
-    priceRisk > 0
-      ? riskCapital / priceRisk
-      : null;
+  const riskManagement =
+    calculateRiskManagement(
+      price,
+      atr14,
+      signal
+    );
 
   return {
     price,
@@ -591,32 +777,36 @@ function analyze(candles) {
 
     rsi14,
 
-    macd: macdData.line,
-    macdSignal: macdData.signal,
-    macdHistogram: macdData.histogram,
+    macd:
+      macdData.line,
+
+    macdSignal:
+      macdData.signal,
+
+    macdHistogram:
+      macdData.histogram,
 
     atr14,
 
     signal,
+
     confidence,
 
     buyScore,
+
     sellScore,
 
     risk,
 
-    stopLoss,
-    takeProfit,
-
-    riskCapital,
-    positionSize
+    riskManagement
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  TRADE EVALUATION
-  ----------------------------------------------------
+====================================================
+TRADE EVALUATION
+====================================================
 */
 
 function evaluateTrade(
@@ -624,6 +814,20 @@ function evaluateTrade(
   candles,
   entryIndex
 ) {
+  if (
+    !setup ||
+    !setup.riskManagement
+  ) {
+    return null;
+  }
+
+  if (
+    setup.signal !== "BUY" &&
+    setup.signal !== "SELL"
+  ) {
+    return null;
+  }
+
   const firstIndex =
     entryIndex + 1;
 
@@ -639,19 +843,26 @@ function evaluateTrade(
     i <= lastIndex;
     i++
   ) {
-    const candle = candles[i];
+    const candle =
+      candles[i];
 
     if (setup.signal === "BUY") {
       const stopHit =
-        candle.low <= setup.stopLoss;
+        candle.low <=
+        setup.riskManagement.stopLoss;
 
       const targetHit =
-        candle.high >= setup.takeProfit;
+        candle.high >=
+        setup.riskManagement.takeProfit;
 
-      if (stopHit && targetHit) {
+      if (
+        stopHit &&
+        targetHit
+      ) {
         return {
           outcome: "LOSS",
-          exitPrice: setup.stopLoss,
+          exitPrice:
+            setup.riskManagement.stopLoss,
           exitIndex: i,
           reason:
             "STOP_AND_TARGET_SAME_CANDLE"
@@ -661,33 +872,43 @@ function evaluateTrade(
       if (stopHit) {
         return {
           outcome: "LOSS",
-          exitPrice: setup.stopLoss,
+          exitPrice:
+            setup.riskManagement.stopLoss,
           exitIndex: i,
-          reason: "STOP_LOSS"
+          reason:
+            "STOP_LOSS"
         };
       }
 
       if (targetHit) {
         return {
           outcome: "WIN",
-          exitPrice: setup.takeProfit,
+          exitPrice:
+            setup.riskManagement.takeProfit,
           exitIndex: i,
-          reason: "TAKE_PROFIT"
+          reason:
+            "TAKE_PROFIT"
         };
       }
     }
 
     if (setup.signal === "SELL") {
       const stopHit =
-        candle.high >= setup.stopLoss;
+        candle.high >=
+        setup.riskManagement.stopLoss;
 
       const targetHit =
-        candle.low <= setup.takeProfit;
+        candle.low <=
+        setup.riskManagement.takeProfit;
 
-      if (stopHit && targetHit) {
+      if (
+        stopHit &&
+        targetHit
+      ) {
         return {
           outcome: "LOSS",
-          exitPrice: setup.stopLoss,
+          exitPrice:
+            setup.riskManagement.stopLoss,
           exitIndex: i,
           reason:
             "STOP_AND_TARGET_SAME_CANDLE"
@@ -697,38 +918,47 @@ function evaluateTrade(
       if (stopHit) {
         return {
           outcome: "LOSS",
-          exitPrice: setup.stopLoss,
+          exitPrice:
+            setup.riskManagement.stopLoss,
           exitIndex: i,
-          reason: "STOP_LOSS"
+          reason:
+            "STOP_LOSS"
         };
       }
 
       if (targetHit) {
         return {
           outcome: "WIN",
-          exitPrice: setup.takeProfit,
+          exitPrice:
+            setup.riskManagement.takeProfit,
           exitIndex: i,
-          reason: "TAKE_PROFIT"
+          reason:
+            "TAKE_PROFIT"
         };
       }
     }
   }
 
-  const exitIndex = lastIndex;
-  const exitPrice = candles[exitIndex].close;
+  const exitIndex =
+    lastIndex;
+
+  const exitPrice =
+    candles[exitIndex].close;
 
   let grossReturn = 0;
 
   if (setup.signal === "BUY") {
     grossReturn =
       ((exitPrice - setup.price) /
-        setup.price) * 100;
+        setup.price) *
+      100;
   }
 
   if (setup.signal === "SELL") {
     grossReturn =
       ((setup.price - exitPrice) /
-        setup.price) * 100;
+        setup.price) *
+      100;
   }
 
   return {
@@ -738,18 +968,21 @@ function evaluateTrade(
         : "LOSS",
 
     exitPrice,
+
     exitIndex,
 
-    reason: "TIME_EXIT",
+    reason:
+      "TIME_EXIT",
 
     grossReturn
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  BACKTEST V3
-  ----------------------------------------------------
+====================================================
+BACKTEST
+====================================================
 */
 
 async function runBacktest(
@@ -764,11 +997,17 @@ async function runBacktest(
       limit
     );
 
-  const candles = market.candles;
+  const candles =
+    market.candles;
 
-  let equity = 100;
-  let peakEquity = 100;
-  let maxDrawdown = 0;
+  let equity =
+    CONFIG.accountBalance;
+
+  let peakEquity =
+    equity;
+
+  let maxDrawdown =
+    0;
 
   let wins = 0;
   let losses = 0;
@@ -785,7 +1024,9 @@ async function runBacktest(
     i < candles.length - 1;
     i++
   ) {
-    if (i < nextAvailable) continue;
+    if (i < nextAvailable) {
+      continue;
+    }
 
     const history =
       candles.slice(0, i + 1);
@@ -793,7 +1034,9 @@ async function runBacktest(
     const setup =
       analyze(history);
 
-    if (!setup) continue;
+    if (!setup) {
+      continue;
+    }
 
     if (
       setup.signal !== "BUY" &&
@@ -816,41 +1059,33 @@ async function runBacktest(
         i
       );
 
-    if (!result) continue;
+    if (!result) {
+      continue;
+    }
 
     let grossReturn;
 
     if (
-      result.reason ===
-      "STOP_LOSS"
-    ) {
-      grossReturn = -CONFIG.riskPerTradePercent;
-    } else if (
-      result.reason ===
-      "TAKE_PROFIT"
-    ) {
-      grossReturn =
-        CONFIG.riskPerTradePercent *
-        CONFIG.riskReward;
-    } else if (
+      result.reason === "STOP_LOSS" ||
       result.reason ===
       "STOP_AND_TARGET_SAME_CANDLE"
     ) {
+      grossReturn = -1;
+    } else if (
+      result.reason === "TAKE_PROFIT"
+    ) {
       grossReturn =
-        -CONFIG.riskPerTradePercent;
+        CONFIG.riskReward;
     } else {
       grossReturn =
-        result.grossReturn *
-        (CONFIG.riskPerTradePercent / 100);
+        result.grossReturn;
     }
 
     const fees =
-      CONFIG.feePercent * 2 *
-      (CONFIG.riskPerTradePercent / 100);
+      CONFIG.feePercent * 2;
 
     const slippage =
-      CONFIG.slippagePercent * 2 *
-      (CONFIG.riskPerTradePercent / 100);
+      CONFIG.slippagePercent * 2;
 
     const netReturn =
       grossReturn -
@@ -862,12 +1097,24 @@ async function runBacktest(
       grossProfit += netReturn;
     } else {
       losses++;
-      grossLoss += Math.abs(netReturn);
+      grossLoss +=
+        Math.abs(netReturn);
     }
 
-    equity =
+    /*
+      Risk-based equity update.
+    */
+
+    const riskAmount =
       equity *
-      (1 + netReturn / 100);
+      (CONFIG.riskPerTradePercent / 100);
+
+    const equityChange =
+      riskAmount *
+      netReturn /
+      100;
+
+    equity += equityChange;
 
     peakEquity =
       Math.max(
@@ -877,7 +1124,8 @@ async function runBacktest(
 
     const drawdown =
       ((peakEquity - equity) /
-        peakEquity) * 100;
+        peakEquity) *
+      100;
 
     maxDrawdown =
       Math.max(
@@ -893,10 +1141,12 @@ async function runBacktest(
 
       exitTime:
         new Date(
-          candles[result.exitIndex].time * 1000
+          candles[result.exitIndex].time *
+          1000
         ).toISOString(),
 
-      signal: setup.signal,
+      signal:
+        setup.signal,
 
       entry:
         round(setup.price),
@@ -905,10 +1155,14 @@ async function runBacktest(
         round(result.exitPrice),
 
       stopLoss:
-        round(setup.stopLoss),
+        round(
+          setup.riskManagement.stopLoss
+        ),
 
       takeProfit:
-        round(setup.takeProfit),
+        round(
+          setup.riskManagement.takeProfit
+        ),
 
       outcome:
         netReturn > 0
@@ -919,10 +1173,10 @@ async function runBacktest(
         result.reason,
 
       grossReturn:
-        round(grossReturn, 4),
+        round(grossReturn, 3),
 
       netReturn:
-        round(netReturn, 4)
+        round(netReturn, 3)
     });
 
     nextAvailable =
@@ -970,11 +1224,11 @@ async function runBacktest(
       slippagePercent:
         CONFIG.slippagePercent,
 
-      riskPerTradePercent:
-        CONFIG.riskPerTradePercent,
-
       accountBalance:
         CONFIG.accountBalance,
+
+      riskPerTradePercent:
+        CONFIG.riskPerTradePercent,
 
       minimumConfidence:
         CONFIG.minConfidence,
@@ -1004,16 +1258,22 @@ async function runBacktest(
         round(profitFactor, 3),
 
       netReturn:
-        round(equity - 100, 4),
+        round(
+          ((equity -
+            CONFIG.accountBalance) /
+            CONFIG.accountBalance) *
+          100,
+          3
+        ),
 
       startingEquity:
-        100,
+        CONFIG.accountBalance,
 
       endingEquity:
-        round(equity, 4),
+        round(equity, 3),
 
       maxDrawdown:
-        round(maxDrawdown, 4)
+        round(maxDrawdown, 3)
     },
 
     note:
@@ -1027,13 +1287,17 @@ async function runBacktest(
   };
 }
 
+
 /*
-  ----------------------------------------------------
-  JSON
-  ----------------------------------------------------
+====================================================
+JSON RESPONSE
+====================================================
 */
 
-function json(data, status = 200) {
+function json(
+  data,
+  status = 200
+) {
   return new Response(
     JSON.stringify(data),
     {
@@ -1053,10 +1317,11 @@ function json(data, status = 200) {
   );
 }
 
+
 /*
-  ----------------------------------------------------
-  WORKER
-  ----------------------------------------------------
+====================================================
+WORKER
+====================================================
 */
 
 export default {
@@ -1064,8 +1329,9 @@ export default {
     const url =
       new URL(request.url);
 
+
     /*
-      HOME
+    HOME
     */
 
     if (url.pathname === "/") {
@@ -1090,8 +1356,9 @@ export default {
       });
     }
 
+
     /*
-      STATUS
+    STATUS
     */
 
     if (
@@ -1147,8 +1414,9 @@ export default {
       });
     }
 
+
     /*
-      PAIR
+    PAIR
     */
 
     if (
@@ -1157,13 +1425,17 @@ export default {
     ) {
       const pair =
         (
-          url.searchParams.get("pair") ||
+          url.searchParams.get(
+            "pair"
+          ) ||
           "XBTUSD"
         ).toUpperCase();
 
       try {
         const resolved =
-          await resolveKrakenPair(pair);
+          await resolveKrakenPair(
+            pair
+          );
 
         return json({
           success:
@@ -1189,6 +1461,7 @@ export default {
           timestamp:
             new Date().toISOString()
         });
+
       } catch (error) {
         return json(
           {
@@ -1206,8 +1479,9 @@ export default {
       }
     }
 
+
     /*
-      ANALYZE
+    ANALYSIS
     */
 
     if (
@@ -1216,13 +1490,17 @@ export default {
     ) {
       const pair =
         (
-          url.searchParams.get("pair") ||
+          url.searchParams.get(
+            "pair"
+          ) ||
           "XBTUSD"
         ).toUpperCase();
 
       const interval =
         Number(
-          url.searchParams.get("interval")
+          url.searchParams.get(
+            "interval"
+          )
         ) || 60;
 
       if (
@@ -1339,43 +1617,8 @@ export default {
               result.risk
           },
 
-          riskManagement: {
-            enabled:
-              true,
-
-            accountBalance:
-              CONFIG.accountBalance,
-
-            riskPerTradePercent:
-              CONFIG.riskPerTradePercent,
-
-            riskCapital:
-              round(
-                result.riskCapital,
-                4
-              ),
-
-            entry:
-              round(result.price),
-
-            stopLoss:
-              round(result.stopLoss),
-
-            takeProfit:
-              round(result.takeProfit),
-
-            riskReward:
-              `1:${CONFIG.riskReward}`,
-
-            positionSize:
-              round(
-                result.positionSize,
-                8
-              )
-          },
-
-          realTrading:
-            false,
+          riskManagement:
+            result.riskManagement,
 
           timestamp:
             new Date().toISOString()
@@ -1395,8 +1638,9 @@ export default {
       }
     }
 
+
     /*
-      BACKTEST
+    BACKTEST
     */
 
     if (
@@ -1405,23 +1649,31 @@ export default {
     ) {
       const pair =
         (
-          url.searchParams.get("pair") ||
+          url.searchParams.get(
+            "pair"
+          ) ||
           "XBTUSD"
         ).toUpperCase();
 
       const interval =
         Number(
-          url.searchParams.get("interval")
+          url.searchParams.get(
+            "interval"
+          )
         ) || 60;
 
       const limit =
         Math.min(
           Math.max(
             Number(
-              url.searchParams.get("limit")
+              url.searchParams.get(
+                "limit"
+              )
             ) || 200,
+
             100
           ),
+
           200
         );
 
@@ -1450,6 +1702,7 @@ export default {
             limit
           )
         );
+
       } catch (error) {
         return json(
           {
@@ -1464,8 +1717,9 @@ export default {
       }
     }
 
+
     /*
-      UNKNOWN ROUTE
+    UNKNOWN ROUTE
     */
 
     return json(
@@ -1476,18 +1730,19 @@ export default {
         availableEndpoints: [
           "/",
           "/api/status",
-
           "/api/pair?pair=XBTUSD",
           "/api/pair?pair=ETHUSD",
-
           "/api/analyze?pair=XBTUSD&interval=60",
           "/api/analyze?pair=XBTUSD&interval=240",
-
           "/api/analyze?pair=ETHUSD&interval=60",
           "/api/analyze?pair=ETHUSD&interval=240",
-
           "/api/backtest?pair=XBTUSD&interval=60&limit=200",
           "/api/backtest?pair=XBTUSD&interval=240&limit=200",
-
           "/api/backtest?pair=ETHUSD&interval=60&limit=200",
-          "/api/backtest?pair
+          "/api/backtest?pair=ETHUSD&interval=240&limit=200"
+        ]
+      },
+      404
+    );
+  }
+};
