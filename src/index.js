@@ -1,10 +1,16 @@
 const CONFIG = {
-  version: "V2.8",
+  version: "V2.9",
 
   feePercent: 0.1,
   slippagePercent: 0.05,
 
   riskPerTradePercent: 1,
+
+  accountBalance: 100,
+
+  minRiskDistancePercent: 0.3,
+
+  maxRiskDistancePercent: 5,
 
   minConfidence: 75,
 
@@ -149,6 +155,144 @@ function atr(candles, period = 14) {
 
 /*
   ----------------------------------------------------
+  RISK MANAGEMENT
+  ----------------------------------------------------
+*/
+
+function calculateRiskManagement(
+  price,
+  stopLoss,
+  takeProfit,
+  signal,
+  accountBalance = CONFIG.accountBalance
+) {
+  if (
+    !Number.isFinite(price) ||
+    !Number.isFinite(stopLoss) ||
+    !Number.isFinite(takeProfit) ||
+    !Number.isFinite(accountBalance) ||
+    accountBalance <= 0
+  ) {
+    return null;
+  }
+
+  const riskDistance =
+    Math.abs(price - stopLoss);
+
+  if (riskDistance <= 0) {
+    return null;
+  }
+
+  const riskDistancePercent =
+    (riskDistance / price) * 100;
+
+  const riskAmount =
+    accountBalance *
+    (CONFIG.riskPerTradePercent / 100);
+
+  const positionSize =
+    riskAmount / riskDistance;
+
+  const positionValue =
+    positionSize * price;
+
+  const estimatedFees =
+    positionValue *
+    (CONFIG.feePercent / 100) *
+    2;
+
+  const estimatedSlippage =
+    positionValue *
+    (CONFIG.slippagePercent / 100) *
+    2;
+
+  const totalTradingCost =
+    estimatedFees +
+    estimatedSlippage;
+
+  const potentialLoss =
+    riskAmount +
+    totalTradingCost;
+
+  const potentialProfit =
+    riskAmount *
+    CONFIG.riskReward -
+    totalTradingCost;
+
+  let validRiskDistance = true;
+
+  if (
+    riskDistancePercent <
+    CONFIG.minRiskDistancePercent
+  ) {
+    validRiskDistance = false;
+  }
+
+  if (
+    riskDistancePercent >
+    CONFIG.maxRiskDistancePercent
+  ) {
+    validRiskDistance = false;
+  }
+
+  return {
+    accountBalance:
+      round(accountBalance),
+
+    riskPerTradePercent:
+      CONFIG.riskPerTradePercent,
+
+    riskAmount:
+      round(riskAmount, 4),
+
+    entry:
+      round(price),
+
+    stopLoss:
+      round(stopLoss),
+
+    takeProfit:
+      round(takeProfit),
+
+    riskDistance:
+      round(riskDistance, 6),
+
+    riskDistancePercent:
+      round(riskDistancePercent, 3),
+
+    positionSize:
+      round(positionSize, 8),
+
+    positionValue:
+      round(positionValue, 4),
+
+    estimatedFees:
+      round(estimatedFees, 4),
+
+    estimatedSlippage:
+      round(estimatedSlippage, 4),
+
+    totalTradingCost:
+      round(totalTradingCost, 4),
+
+    potentialLoss:
+      round(potentialLoss, 4),
+
+    potentialProfit:
+      round(potentialProfit, 4),
+
+    riskReward:
+      `1:${CONFIG.riskReward}`,
+
+    validRiskDistance,
+
+    signal
+  };
+}
+
+
+/*
+  ----------------------------------------------------
   KRAKEN PAIR RESOLUTION
   ----------------------------------------------------
 */
@@ -199,10 +343,6 @@ function pairMatches(info, requested) {
     return true;
   }
 
-  /*
-    BTC/XBT aliases
-  */
-
   if (
     (req === "BTCUSD" || req === "XBTUSD") &&
     quote === "USD" &&
@@ -226,10 +366,6 @@ async function resolveKrakenPair(requestedPair) {
   const requested =
     String(requestedPair || "XBTUSD")
       .toUpperCase();
-
-  /*
-    Try the modern Kraken pair format first.
-  */
 
   const directCandidates = [];
 
@@ -256,10 +392,6 @@ async function resolveKrakenPair(requestedPair) {
       "ETHUSD"
     );
   }
-
-  /*
-    Get Kraken's current AssetPairs list.
-  */
 
   const response = await fetch(
     "https://api.kraken.com/0/public/AssetPairs",
@@ -299,10 +431,6 @@ async function resolveKrakenPair(requestedPair) {
 
   const result = data.result || {};
 
-  /*
-    First try exact known names.
-  */
-
   for (const candidate of directCandidates) {
     for (const [key, info] of Object.entries(result)) {
       if (
@@ -340,10 +468,6 @@ async function resolveKrakenPair(requestedPair) {
     }
   }
 
-  /*
-    Then use semantic matching.
-  */
-
   for (const [key, info] of Object.entries(result)) {
     if (
       pairMatches(
@@ -361,10 +485,6 @@ async function resolveKrakenPair(requestedPair) {
       };
     }
   }
-
-  /*
-    Helpful error with available USD pairs.
-  */
 
   const usdPairs = [];
 
@@ -540,10 +660,6 @@ function analyze(candles) {
   let buyScore = 0;
   let sellScore = 0;
 
-  /*
-    Condition 1: price vs EMA20
-  */
-
   if (price > ema20) {
     buyScore++;
   }
@@ -552,10 +668,6 @@ function analyze(candles) {
     sellScore++;
   }
 
-  /*
-    Condition 2: EMA20 vs EMA50
-  */
-
   if (ema20 > ema50) {
     buyScore++;
   }
@@ -563,10 +675,6 @@ function analyze(candles) {
   if (ema20 < ema50) {
     sellScore++;
   }
-
-  /*
-    Condition 3: RSI
-  */
 
   if (
     rsi14 >= 50 &&
@@ -581,10 +689,6 @@ function analyze(candles) {
   ) {
     sellScore++;
   }
-
-  /*
-    Condition 4: MACD
-  */
 
   if (macdData.histogram > 0) {
     buyScore++;
@@ -865,9 +969,14 @@ async function runBacktest(
   const candles =
     market.candles;
 
-  let equity = 100;
-  let peakEquity = 100;
-  let maxDrawdown = 0;
+  let equity =
+    CONFIG.accountBalance;
+
+  let peakEquity =
+    equity;
+
+  let maxDrawdown =
+    0;
 
   let wins = 0;
   let losses = 0;
@@ -912,6 +1021,23 @@ async function runBacktest(
       continue;
     }
 
+    const risk =
+      calculateRiskManagement(
+        setup.price,
+        setup.stopLoss,
+        setup.takeProfit,
+        setup.signal,
+        equity
+      );
+
+    if (!risk) {
+      continue;
+    }
+
+    if (!risk.validRiskDistance) {
+      continue;
+    }
+
     const result =
       evaluateTrade(
         setup,
@@ -923,53 +1049,86 @@ async function runBacktest(
       continue;
     }
 
-    let grossReturn;
+    let rMultiple = 0;
 
     if (
       result.reason ===
       "STOP_LOSS"
     ) {
-      grossReturn = -1;
+      rMultiple = -1;
     } else if (
       result.reason ===
       "TAKE_PROFIT"
     ) {
-      grossReturn =
+      rMultiple =
         CONFIG.riskReward;
     } else if (
       result.reason ===
       "STOP_AND_TARGET_SAME_CANDLE"
     ) {
-      grossReturn = -1;
+      rMultiple = -1;
     } else {
-      grossReturn =
-        result.grossReturn;
+      const priceMove =
+        setup.signal === "BUY"
+          ? result.exitPrice - setup.price
+          : setup.price - result.exitPrice;
+
+      const riskDistance =
+        Math.abs(
+          setup.price -
+          setup.stopLoss
+        );
+
+      rMultiple =
+        riskDistance > 0
+          ? priceMove / riskDistance
+          : 0;
     }
 
+    const positionValue =
+      risk.positionValue;
+
     const fees =
-      CONFIG.feePercent * 2;
+      positionValue *
+      (CONFIG.feePercent / 100) *
+      2;
 
     const slippage =
-      CONFIG.slippagePercent * 2;
+      positionValue *
+      (CONFIG.slippagePercent / 100) *
+      2;
+
+    const tradingCosts =
+      fees + slippage;
+
+    const grossPnL =
+      risk.riskAmount *
+      rMultiple;
+
+    const netPnL =
+      grossPnL -
+      tradingCosts;
 
     const netReturn =
-      grossReturn -
-      fees -
-      slippage;
+      equity > 0
+        ? (netPnL / equity) * 100
+        : 0;
 
-    if (netReturn > 0) {
+    if (netPnL > 0) {
       wins++;
       grossProfit +=
-        netReturn;
+        netPnL;
     } else {
       losses++;
       grossLoss +=
-        Math.abs(netReturn);
+        Math.abs(netPnL);
     }
 
     equity =
-      equity *
-      (1 + netReturn / 100);
+      Math.max(
+        0,
+        equity + netPnL
+      );
 
     peakEquity =
       Math.max(
@@ -978,9 +1137,11 @@ async function runBacktest(
       );
 
     const drawdown =
-      ((peakEquity - equity) /
-        peakEquity) *
-      100;
+      peakEquity > 0
+        ? ((peakEquity - equity) /
+            peakEquity) *
+          100
+        : 0;
 
     maxDrawdown =
       Math.max(
@@ -1015,19 +1176,67 @@ async function runBacktest(
       takeProfit:
         round(setup.takeProfit),
 
+      accountBalanceBefore:
+        round(
+          equity - netPnL,
+          4
+        ),
+
+      positionSize:
+        round(
+          risk.positionSize,
+          8
+        ),
+
+      positionValue:
+        round(
+          risk.positionValue,
+          4
+        ),
+
+      riskAmount:
+        round(
+          risk.riskAmount,
+          4
+        ),
+
+      rMultiple:
+        round(
+          rMultiple,
+          3
+        ),
+
       outcome:
-        netReturn > 0
+        netPnL > 0
           ? "WIN"
           : "LOSS",
 
       reason:
         result.reason,
 
-      grossReturn:
-        round(grossReturn, 3),
+      grossPnL:
+        round(
+          grossPnL,
+          4
+        ),
+
+      tradingCosts:
+        round(
+          tradingCosts,
+          4
+        ),
+
+      netPnL:
+        round(
+          netPnL,
+          4
+        ),
 
       netReturn:
-        round(netReturn, 3)
+        round(
+          netReturn,
+          3
+        )
     });
 
     nextAvailable =
@@ -1069,6 +1278,9 @@ async function runBacktest(
       "Kraken",
 
     configuration: {
+      accountBalance:
+        CONFIG.accountBalance,
+
       feePercent:
         CONFIG.feePercent,
 
@@ -1080,6 +1292,12 @@ async function runBacktest(
 
       minimumConfidence:
         CONFIG.minConfidence,
+
+      minRiskDistancePercent:
+        CONFIG.minRiskDistancePercent,
+
+      maxRiskDistancePercent:
+        CONFIG.maxRiskDistancePercent,
 
       riskReward:
         `1:${CONFIG.riskReward}`,
@@ -1106,20 +1324,35 @@ async function runBacktest(
         round(profitFactor, 3),
 
       netReturn:
-        round(equity - 100, 3),
+        round(
+          ((equity -
+            CONFIG.accountBalance) /
+            CONFIG.accountBalance) *
+          100,
+          3
+        ),
 
       startingEquity:
-        100,
+        round(
+          CONFIG.accountBalance,
+          4
+        ),
 
       endingEquity:
-        round(equity, 3),
+        round(
+          equity,
+          4
+        ),
 
       maxDrawdown:
-        round(maxDrawdown, 3)
+        round(
+          maxDrawdown,
+          3
+        )
     },
 
     note:
-      "Historical simulation only. Fees and slippage included. No guarantee of future performance.",
+      "Historical simulation only. Risk-based position sizing, fees and slippage included. No guarantee of future performance.",
 
     recentTrades:
       trades.slice(-20),
@@ -1228,10 +1461,21 @@ export default {
           "4-condition confirmation",
 
         backtest:
-          "multi-candle",
+          "risk-based multi-candle",
 
-        riskReward:
-          "1:2",
+        riskManagement: {
+          enabled:
+            true,
+
+          riskPerTradePercent:
+            CONFIG.riskPerTradePercent,
+
+          accountBalance:
+            CONFIG.accountBalance,
+
+          riskReward:
+            `1:${CONFIG.riskReward}`
+        },
 
         realTrading:
           false,
@@ -1244,7 +1488,6 @@ export default {
 
     /*
       PAIR CHECK
-      هذا endpoint جديد للتأكد من اسم زوج Kraken.
     */
 
     if (
@@ -1331,6 +1574,17 @@ export default {
           )
         ) || 60;
 
+      const accountBalance =
+        Math.max(
+          Number(
+            url.searchParams.get(
+              "balance"
+            )
+          ) ||
+          CONFIG.accountBalance,
+          1
+        );
+
       if (
         !ALLOWED_INTERVALS.includes(
           interval
@@ -1379,6 +1633,15 @@ export default {
         ) {
           risk = "MEDIUM";
         }
+
+        const riskManagement =
+          calculateRiskManagement(
+            result.price,
+            result.stopLoss,
+            result.takeProfit,
+            result.signal,
+            accountBalance
+          );
 
         return json({
           success:
@@ -1457,19 +1720,8 @@ export default {
             risk
           },
 
-          riskManagement: {
-            entry:
-              round(result.price),
-
-            stopLoss:
-              round(result.stopLoss),
-
-            takeProfit:
-              round(result.takeProfit),
-
-            riskReward:
-              "1:2"
-          },
+          riskManagement:
+            riskManagement,
 
           timestamp:
             new Date().toISOString()
@@ -1587,6 +1839,8 @@ export default {
           "/api/analyze?pair=XBTUSD&interval=240",
           "/api/analyze?pair=ETHUSD&interval=60",
           "/api/analyze?pair=ETHUSD&interval=240",
+          "/api/analyze?pair=XBTUSD&interval=60&balance=100",
+          "/api/analyze?pair=ETHUSD&interval=60&balance=100",
           "/api/backtest?pair=XBTUSD&interval=60&limit=200",
           "/api/backtest?pair=XBTUSD&interval=240&limit=200",
           "/api/backtest?pair=ETHUSD&interval=60&limit=200",
